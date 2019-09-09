@@ -17,7 +17,11 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-include_directories(SYSTEM ${PCL_INCLUDE_DIRS})
+include_directories(SYSTEM 
+    ${PCL_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
+)
+
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
@@ -35,10 +39,10 @@ list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 # target_link_libraries(test_build_meshes ${PCL_LIBRARIES})
 # target_link_libraries(test_pointcloud_processing ${PCL_LIBRARIES})
 
-target_include_directories(test_pointcloud_processing
-    SYSTEM PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
-)
+# target_include_directories(test_pointcloud_processing
+#     SYSTEM PUBLIC
+#     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
+# )
 
 target_compile_options(test_pointcloud_processing PUBLIC
     $<$<CONFIG:RELEASE>:-O3>
