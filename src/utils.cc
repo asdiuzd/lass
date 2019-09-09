@@ -262,9 +262,8 @@ void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double
 	}
 }
 
-double normalize_value(double value, double min, double max) {
-    return (value - min) / (max - min);
-}
+// double normalize_value(double value, double min, double max) {
+// }
 
 bool annotate_point_cloud(const char *annotation_dir, std::vector<std::string>& image_fns, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<int>&  point_semantics) {
     LOG(INFO) << "start annotate point cloud with semantic labels..." << endl;
@@ -285,10 +284,71 @@ bool annotate_point_cloud(const char *annotation_dir, std::vector<std::string>& 
         auto& proj = measurements[idx];
         int x = static_cast<int>(proj.x), y = static_cast<int>(proj.y);
 
-        point = img.at<unsigned char>(x, y);
+        point = img.at<unsigned char>(y, x);
         // point = img.data[x * 1024 + y];
     }
 
     return true;
 }
+
+bool filter_useless_semantics(vector<int>& original_labels, vector<string>& original_semantics, vector<string>& remained_semantics) {
+    vector<int> label_mapping, label_counter;
+    label_mapping.resize(original_semantics.size(), -1);
+    label_counter.resize(remained_semantics.size(), 0);
+
+    for (int o_idx = 0; o_idx < original_semantics.size(); o_idx++) {
+        for (int r_idx = 0; r_idx < remained_semantics.size(); r_idx++) {
+            if (original_semantics[o_idx] == remained_semantics[r_idx]) {
+                label_mapping[o_idx] = r_idx;
+                break;
+            }
+        }
+    }
+
+    for (auto& label: original_labels) {
+        label = label_mapping[label];
+        if (label != -1) {
+            label_counter[label]++;
+        }
+    }
+
+    LOG(INFO) << "original semantic numbers = " << original_semantics.size() << endl;
+    LOG(INFO) << "remained semantic numbers = " << remained_semantics.size() << endl;
+
+    LOG(INFO) << "label numbers:" << endl;
+    for (int idx = 0; idx < label_counter.size(); idx++) {
+        LOG(INFO) << remained_semantics[idx] << ":\t" << label_counter[idx] << endl;
+    }
+    LOG(INFO) << "Finished" << endl;
+}
+
+bool retrieve_semantic_label_via_color(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pcd, int label_numbers, std::vector<int>& labels) {
+    vector<vector<unsigned char>> color_mapping;
+    color_mapping.resize(label_numbers);
+
+    labels.resize(pcd->points.size(), -1);
+
+    for (int i = 0; i < label_numbers; i++) {
+        const double value = normalize_value(i, 0, label_numbers);
+        auto& color = color_mapping[i];
+        color.resize(3);
+
+        GroundColorMix(color[0], color[1], color[2], value, 0, 255);
+    }
+
+    for (int idx = 0; idx < pcd->points.size(); idx++) {
+        auto& point = pcd->points[idx];
+        auto& label = labels[idx];
+
+        for (int i = 0; i < label_numbers; i++) {
+            auto& color = color_mapping[i];
+
+            if (point.r == color[0] && point.g == color[1] && point.b == color[2]) {
+                label = i;
+                break;
+            }
+        }
+    }
+}
+
 }

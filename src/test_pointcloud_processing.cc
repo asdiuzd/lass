@@ -33,20 +33,25 @@
 #include <Eigen/Geometry>
 
 #include "utils.h"
+#include "json.h"
 
 typedef pcl::PointXYZRGB PointType;
 using namespace std;
 using namespace pcl;
 using namespace pcl::visualization;
 using namespace lass;
+using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 void test_nvm_to_pcd(int argc, char** argv);
 void test_semantic_segmentation(int argc, char** argv);
+void test_view_segmentation(int argc, char **argv);
 
 int main(int argc, char** argv) {
+    google::InitGoogleLogging(argv[0]);
     // test_nvm_to_pcd(argc, argv);
-    test_semantic_segmentation(argc, argv);
+    // test_semantic_segmentation(argc, argv);
+    test_view_segmentation(argc, argv);
 }
 
 void test_nvm_to_pcd(int argc, char** argv) {
@@ -54,7 +59,6 @@ void test_nvm_to_pcd(int argc, char** argv) {
         argv[1] - nvm file name
         argv[2] - pcd file name
      */
-    // CHECK(argc < 3) << "./test nvm_file_name saved_pcd_file_name" << endl;
 
     transfer_nvm_to_pcd(argv[1], argv[2], true);
 }
@@ -66,6 +70,11 @@ void test_semantic_segmentation(int argc, char** argv) {
         argv[3] - semantic annotation dir
         argv[4] - pcd file name (to be saved)
      */
+    CHECK(fs::exists(argv[1])) << argv[1] << " does not exist" << endl;
+    CHECK(fs::exists(argv[2])) << argv[2] << " does not exist" << endl;
+    CHECK(fs::exists(argv[3])) << argv[3] << " does not exist" << endl;
+    CHECK(fs::exists(argv[4])) << argv[4] << " does not exist" << endl;
+
     string nvm_fn(argv[1]), list_fn(argv[2]), annotation_dir(argv[3]), pcd_fn(argv[4]);
 
     std::vector<CameraF> cameras;
@@ -103,16 +112,85 @@ void test_semantic_segmentation(int argc, char** argv) {
     LOG(INFO) << "max semantic value: " << max_s << endl;
     LOG(INFO) << "min semantic value: " << min_s << endl;
 
+    ofstream of("parameters.txt");
+
+    of << points_semantics.size() << endl;
     for (int i = 0; i < points.size(); i++) {
         auto& point = cloud->points[i];
+        of << points_semantics[i] << endl;
         if (points_semantics[i] == -1) {
             point.r = point.g = point.b = 10;
         } else {
-            lass::GroundColorMix(point.r, point.g, point.b, normalize_value(points_semantics[i], min_s, max_s));
+            lass::GroundColorMix(point.r, point.g, point.b, normalize_value(points_semantics[i], 0, max_s), 0, 255);
         }
     }
+
 
     pcl::PCDWriter writer;
     writer.writeBinaryCompressed<pcl::PointXYZRGB> (pcd_fn.c_str(), *cloud);
     visualize_pcd(cloud);
+}
+
+void test_view_segmentation(int argc, char **argv) {
+    /*
+        argv[1] -- input point cloud .pcd
+        argv[2] -- original semantic names json file
+        argv[3] -- remained semantic names json file
+        argv[4] -- parameters file
+     */
+    CHECK(fs::exists(argv[1])) << argv[1] << " does not exist" << endl;
+    CHECK(fs::exists(argv[2])) << argv[2] << " does not exist" << endl;
+    CHECK(fs::exists(argv[3])) << argv[3] << " does not exist" << endl;
+    CHECK(fs::exists(argv[4])) << argv[4] << " does not exist" << endl;
+
+    LOG(INFO) << "read pcd" << endl;   
+    PCDReader reader;
+    PointCloud<PointXYZRGB>::Ptr pcd(new PointCloud<PointXYZRGB>());
+    vector<int> semantic_labels;
+    reader.read<PointXYZRGB>(argv[1], *pcd);
+
+    LOG(INFO) << "read json" << endl;   
+    json j_original_semantic_names, j_remained_semantic_names;
+    ifstream o_if(argv[2]), r_if(argv[3]);
+    vector<string> original_names, remained_names;
+    o_if >> j_original_semantic_names;
+    r_if >> j_remained_semantic_names;
+
+    original_names.resize(j_original_semantic_names.size());
+    remained_names.resize(j_remained_semantic_names.size());
+
+    for (int idx = 0; idx < original_names.size(); idx++) {
+        original_names[idx] = j_original_semantic_names[idx].get<string>();
+    }
+    for (int idx = 0; idx < remained_names.size(); idx++) {
+        remained_names[idx] = j_remained_semantic_names[idx].get<string>();
+    }
+
+    ifstream p_if(argv[4]);
+    while(!p_if.eof()) {
+        int label;
+        p_if >> label;
+        semantic_labels.push_back(label);
+    }
+    // retrieve_semantic_label_via_color(pcd, original_names.size(), semantic_labels);
+    filter_useless_semantics(semantic_labels, original_names, remained_names);
+
+    int label_number = remained_names.size();
+    for (int idx = 0; idx < pcd->points.size(); idx++) {
+        auto& point = pcd->points[idx];
+        if (semantic_labels[idx] == -1) {
+            point.r = point.g = point.b = 20;
+        } else {
+            GroundColorMix(point.r, point.g, point.b, normalize_value(semantic_labels[idx], 0, label_number), 0, 255);
+        }
+    }
+
+    ofstream p_of("p.txt");
+    p_of << semantic_labels.size() << endl;    
+    for (auto& label:semantic_labels) {
+        p_of << label << endl;
+    }
+
+    LOG(INFO) << "start visualization" << endl;
+    visualize_pcd(pcd);
 }

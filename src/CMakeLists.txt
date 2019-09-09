@@ -1,0 +1,2 @@
+add_executable(test_pointcloud_processing test_pointcloud_processing.cc utils.cc)
+target_link_libraries(test_pointcloud_processing ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)

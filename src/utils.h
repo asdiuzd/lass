@@ -52,8 +52,13 @@ bool transfer_nvm_to_pcd(std::vector<Point3DF>& nvm, pcl::PointCloud<pcl::PointX
 
 bool annotate_point_cloud(const char *annotation_dir, std::vector<std::string>& image_fns, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<int>&  point_semantics);
 // get color with given min, max, x
+bool filter_useless_semantics(std::vector<int>& original_labels, std::vector<std::string>& original_semantics, std::vector<std::string>& remained_semantics);
+bool retrieve_semantic_label_via_color(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pcd, int label_numbers, std::vector<int>& labels);
+
 void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double x, double min=0, double max=255);
-inline double normalize_value(double value, double min, double max);
+inline double normalize_value(double value, double min, double max) {
+    return (value - min) / (max - min);
+}
 }
 
 #endif
