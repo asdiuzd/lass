@@ -1,3 +1,4 @@
+#include <pcl/filters/statistical_outlier_removal.h>
 #include<experimental/filesystem>
 #include<opencv2/opencv.hpp>
 #include<omp.h>
@@ -11,8 +12,8 @@ namespace fs = std::experimental::filesystem;
 
 namespace lass {
 
-void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
-    pcl::visualization::CloudViewer viewer("simple");
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const string vn) {
+    pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer.showCloud(cloud);
     while(!viewer.wasStopped()){}
 }
@@ -349,6 +350,33 @@ bool retrieve_semantic_label_via_color(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& p
             }
         }
     }
+}
+
+PointCloud<PointXYZRGB>::Ptr filter_outliers_via_radius(PointCloud<PointXYZRGB>::Ptr pcd, float radius, int k, bool set_negative) {
+    pcl::PointCloud<PointXYZRGB>::Ptr cloud = pcd;
+    pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
+
+    LOG(INFO) << "Filtering outliers..." << std::endl;
+    LOG(INFO) << radius << ", " << k << std::endl;
+    // pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+    // sor.setInputCloud(cloud);
+    // sor.setMeanK(k);
+    // sor.setStddevMulThresh(radius);
+    RadiusOutlierRemoval<PointXYZRGB> sor;
+    sor.setInputCloud(cloud);
+    sor.setMinNeighborsInRadius(k);
+    sor.setRadiusSearch(radius);
+
+    // sor.setNegative(true);
+    // sor.filter(m_index_of_pcd); // ???
+
+    sor.setNegative(set_negative);
+    sor.filter(*cloud_filtered);
+
+    LOG(INFO) << "before filtering:\tpoint number = " << pcd->points.size() << endl;
+    LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
+    LOG(INFO) << "filtered number = " << pcd->points.size() - cloud_filtered->points.size() << endl;
+    return cloud_filtered;
 }
 
 }

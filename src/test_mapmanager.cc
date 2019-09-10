@@ -44,6 +44,17 @@ using namespace lass;
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
+void test_io(int argc, char** argv);
+void test_landmark(int argc, char** argv);
+void test_background(int argc, char** argv);
+
+int main(int argc, char** argv) {
+    
+    // test_io(argc, argv);
+    // test_landmark(argc, argv);
+    test_background(argc, argv);
+}
+
 void test_io(int argc, char** argv) {
     /*
         argv[1] - input dir
@@ -79,15 +90,72 @@ void test_landmark(int argc, char** argv) {
     const string ifn(argv[1]);
     auto mm = make_unique<MapManager>(ifn);
     mm->update_view();
-    mm->show_point_cloud();
+    // mm->show_point_cloud();
 
-    mm->dye_through_landmarks_semantics();
+    mm->figure_out_landmarks_annotation();
+    mm->dye_through_landmarks();
     mm->update_view();
-    mm->show_point_cloud();
+    // mm->show_point_cloud();
+
+    auto landmarks = mm->extract_landmarks();
+    // visualize_pcd(landmarks);
+
+    auto filtered = filter_outliers_via_radius(landmarks, 2, 5, false);
+    auto outliers = filter_outliers_via_radius(landmarks, 2, 5, true);
+    visualize_pcd(filtered);
+    visualize_pcd(outliers);
+
+    auto filtered2 = filter_outliers_via_radius(filtered, 2, 5, false);
+    auto outliers2 = filter_outliers_via_radius(filtered, 2, 5, true);
+    visualize_pcd(filtered2);
+    visualize_pcd(outliers2);
+
+    auto filtered3 = filter_outliers_via_radius(filtered2, 2, 5, false);
+    auto outliers3 = filter_outliers_via_radius(filtered2, 2, 5, true);
+    visualize_pcd(filtered3);
+    visualize_pcd(outliers3);
 }
 
-int main(int argc, char** argv) {
-    
-    // test_io(argc, argv);
-    test_landmark(argc, argv);
+void test_background(int argc, char** argv) {
+    /*
+        argv[1] - input dir
+     */
+    CHECK(fs::exists(argv[1])) << argv[1] << " does not exist" << endl;
+ 
+    const string ifn(argv[1]);
+    auto mm = make_unique<MapManager>(ifn);
+    mm->update_view();
+    // mm->show_point_cloud();
+
+    LOG(INFO) << 1 << endl;
+    mm->figure_out_landmarks_annotation();
+    LOG(INFO) << 1 << endl;
+    mm->dye_through_semantics();
+    LOG(INFO) << 1 << endl;
+    mm->update_view();
+    // mm->show_point_cloud();
+
+    LOG(INFO) << 2 << endl;
+    auto background = mm->extract_background();
+    // visualize_pcd(landmarks);
+
+    auto filtered = filter_outliers_via_radius(background, 2, 5, false);
+    auto outliers = filter_outliers_via_radius(background, 2, 5, true);
+    visualize_pcd(filtered);
+    visualize_pcd(outliers);
+
+    auto removed = mm->extract_removed();
+    visualize_pcd(removed);
+
+    auto unknown = mm->extract_unknown();
+    visualize_pcd(unknown);
+    // auto filtered2 = filter_outliers_via_radius(filtered, 2, 5, false);
+    // auto outliers2 = filter_outliers_via_radius(filtered, 2, 5, true);
+    // visualize_pcd(filtered2);
+    // visualize_pcd(outliers2);
+
+    // auto filtered3 = filter_outliers_via_radius(filtered2, 2, 5, false);
+    // auto outliers3 = filter_outliers_via_radius(filtered2, 2, 5, true);
+    // visualize_pcd(filtered3);
+    // visualize_pcd(outliers3);
 }

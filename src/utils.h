@@ -16,6 +16,7 @@
 #include <pcl/visualization/cloud_viewer.h>
 #include <pcl/io/io.h>
 #include <pcl/io/pcd_io.h>
+#include <pcl/filters/radius_outlier_removal.h>
 
 #include <Eigen/Geometry>
 
@@ -27,7 +28,7 @@
 namespace lass {
 
 // show point cloud
-void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud);
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const std::string vn = std::string("simple"));
 
 // load camera poses
 bool load_info_file(const char *fn, std::vector<Eigen::Matrix4f>& es);
@@ -54,6 +55,8 @@ bool annotate_point_cloud(const char *annotation_dir, std::vector<std::string>& 
 // get color with given min, max, x
 bool filter_useless_semantics(std::vector<int>& original_labels, std::vector<std::string>& original_semantics, std::vector<std::string>& remained_semantics);
 bool retrieve_semantic_label_via_color(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pcd, int label_numbers, std::vector<int>& labels);
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr filter_outliers_via_radius(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, float radius=1, int k=10, bool set_negative=false);
 
 void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double x, double min=0, double max=255);
 inline double normalize_value(double value, double min, double max) {

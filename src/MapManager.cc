@@ -35,6 +35,9 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void
         mm->export_to_dir("./tmp");
     } else if (event.getKeySym() == "r" && event.keyDown()) {
         stop_view = true;
+    } else if (event.getKeySym() == "t" && event.keyDown()) {
+        LOG(INFO) << "Toggle use show flag" << endl;
+        mm->m_use_flag = !mm->m_use_flag;
     }
 }
 
@@ -71,22 +74,24 @@ void MapManager::load_semantic_json(const std::string& fn) {
     ifstream s_in(fn.c_str());
     s_in >> j;
 
-    LOG(INFO) << 1 << endl;
     m_semantic_names.resize(j["overall_semantics"].size());
     for(int idx = 0; idx < j["overall_semantics"].size(); idx++) {
         m_semantic_names[idx] = j["overall_semantics"][idx].get<string>();
     }
 
-    LOG(INFO) << 2 << endl;
     m_landmarks_semantic_names.resize(j["landmarks"].size());
     for(int idx = 0; idx < j["landmarks"].size(); idx++) {
         m_landmarks_semantic_names[idx] = j["landmarks"][idx].get<string>();
     }
 
-    LOG(INFO) << 3 << endl;
     m_background_semantic_names.resize(j["background"].size());
     for(int idx = 0; idx < j["background"].size(); idx++) {
         m_background_semantic_names[idx] = j["background"][idx].get<string>();
+    }
+
+    m_removed_semantic_names.resize(j["removed"].size());
+    for(int idx = 0; idx < j["removed"].size(); idx++) {
+        m_removed_semantic_names[idx] = j["removed"][idx].get<string>();
     }
 }
 
@@ -101,6 +106,9 @@ void MapManager::export_to_semantic_json(const std::string &fn) {
     }
     for(int idx = 0; idx < m_background_semantic_names.size(); idx++) {
         j["background"].push_back(m_background_semantic_names[idx]);
+    }
+    for(int idx = 0; idx < m_removed_semantic_names.size(); idx++) {
+        j["removed"].push_back(m_removed_semantic_names[idx]);
     }
 
     ofstream s_on(fn.c_str());
@@ -190,9 +198,24 @@ void MapManager::dye_through_clusters() {
     }
 }
 
-void MapManager::dye_through_landmarks_semantics() {
-    vector<LandmarkType> m_landmark_label;
-    m_landmark_label.resize(m_semantic_names.size(), LandmarkType::REMOVED);
+void MapManager::dye_through_landmarks() {
+    for (int idx = 0; idx < m_pcd->points.size(); idx++) {
+        auto &pt = m_pcd->points[idx];
+        if (m_semantic_label[idx] == -1) {
+            GroundColorMix(pt.r, pt.g, pt.b, normalize_value(LandmarkType::UNKNOWN, 0, LandmarkType::NUMBER));
+        } else {
+            auto label = m_landmark_label[m_semantic_label[idx]];
+            GroundColorMix(pt.r, pt.g, pt.b, normalize_value(label, 0, LandmarkType::NUMBER));
+        }
+    }
+}
+
+void MapManager::figure_out_landmarks_annotation() {
+    m_landmark_label.resize(m_semantic_names.size(), LandmarkType::UNKNOWN);
+    m_index_of_landmark = PointIndices::Ptr{new PointIndices};
+    m_index_of_background = PointIndices::Ptr{new PointIndices};
+    m_index_of_removed = PointIndices::Ptr{new PointIndices};
+    m_index_of_unknown = PointIndices::Ptr{new PointIndices};
 
     for (int idx = 0; idx < m_semantic_names.size(); idx++) {
         auto &name = m_semantic_names[idx];
@@ -208,19 +231,40 @@ void MapManager::dye_through_landmarks_semantics() {
             m_landmark_label[idx] = LandmarkType::BACKGROUND;
             continue;
         }
+
+        auto it3 = std::find(m_removed_semantic_names.begin(), m_removed_semantic_names.end(), name);
+        if (it3 != m_removed_semantic_names.end()) {
+            m_landmark_label[idx] = LandmarkType::REMOVED;
+            continue;
+        }
     }
 
     vector<int> counter;
     counter.resize(LandmarkType::NUMBER);
     for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-        auto &pt = m_pcd->points[idx];
         if (m_semantic_label[idx] == -1) {
-            GroundColorMix(pt.r, pt.g, pt.b, normalize_value(LandmarkType::UNKNOWN, 0, LandmarkType::NUMBER));
             counter[LandmarkType::UNKNOWN]++;
         } else {
-            auto label = m_landmark_label[m_semantic_label[idx]];
-            GroundColorMix(pt.r, pt.g, pt.b, normalize_value(label, 0, LandmarkType::NUMBER));
+            auto& label = m_landmark_label[m_semantic_label[idx]];
             counter[label]++;
+
+            switch (label) {
+            case LandmarkType::LANDMARK:
+                m_index_of_landmark->indices.push_back(idx);
+                break;
+
+            case LandmarkType::BACKGROUND:
+                m_index_of_background->indices.push_back(idx);
+                break;
+
+            case LandmarkType::REMOVED:
+                m_index_of_removed->indices.push_back(idx);
+                break; 
+
+            default:
+                m_index_of_unknown->indices.push_back(idx);
+                break;
+            }
         }
     }
 
@@ -228,6 +272,50 @@ void MapManager::dye_through_landmarks_semantics() {
     for (int idx = 0; idx < counter.size(); idx++) {
         LOG(INFO) << "\t" << idx << ":\t" << counter[idx] << endl;
     }
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_landmarks() {
+    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB>     extractor;
+
+    extractor.setInputCloud(m_pcd);
+    extractor.setIndices(m_index_of_landmark);
+    extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_background() {
+    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB>     extractor;
+
+    extractor.setInputCloud(m_pcd);
+    extractor.setIndices(m_index_of_background);
+    extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_removed() {
+    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB>     extractor;
+
+    extractor.setInputCloud(m_pcd);
+    extractor.setIndices(m_index_of_removed);
+    extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_unknown() {
+    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB>     extractor;
+
+    extractor.setInputCloud(m_pcd);
+    extractor.setIndices(m_index_of_unknown);
+    extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
 }
 
 void MapManager::show_point_cloud() {
@@ -256,4 +344,9 @@ void MapManager::filter_useless_semantics_from_json(const std::string& fn) {
     m_semantic_names = remained_names;
 }
 
+void MapManager::filter_outliers(float radius, int k) {
+    figure_out_landmarks_annotation();
+    // PointIndices::Ptr
+    
+}
 }
