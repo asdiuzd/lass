@@ -15,7 +15,41 @@ using json = nlohmann::json;
 namespace lass {
 
 #define EMBEDDING_LENGTH 12
+#define StandardCosTheta 0.5
+// cos(PI / 3)
 
+// local equilibrium
+class LEAutoDiffCost {
+public:
+    LEAutoDiffCost(double w): w_(w) {}
+    template<typename T>
+    bool operator() (
+        const T* const yi,
+        const T* const yj,
+        const T* const yl,
+        T* e
+    ) const {
+        e[0] = T(0);
+        auto li = T(0), lj = T(0);
+        // e[0] = w_ * (yi[0] - yl[0]) * (yj[0] - yl[0]);
+
+        for(int idx = 0; idx < EMBEDDING_LENGTH; idx++) {
+            e[0] += w_ * (yi[idx] - yl[idx]) * (yj[idx] - yl[idx]);
+            li += yi[idx] * yi[idx];
+            lj += yj[idx] * yj[idx];
+        }
+
+        e[0] /= sqrt(li) * sqrt(lj);
+        e[0] -= StandardCosTheta;
+
+        return true;
+    }
+
+private:
+    const double w_;
+};
+
+// local orthogonality
 class LOAutoDiffCost {
 public:
     LOAutoDiffCost(double w): w_(w) {}
@@ -206,8 +240,8 @@ void embedding_optimization(vector<vector<double>>& coding_book, vector<vector<d
                 yj = coding_book[j].data();
 
                 problem.AddResidualBlock(
-                    new AutoDiffCostFunction<LOAutoDiffCost, 1, EMBEDDING_LENGTH, EMBEDDING_LENGTH, EMBEDDING_LENGTH>(
-                        new LOAutoDiffCost(w_lo)
+                    new AutoDiffCostFunction<LEAutoDiffCost, 1, EMBEDDING_LENGTH, EMBEDDING_LENGTH, EMBEDDING_LENGTH>(
+                        new LEAutoDiffCost(w_lo)
                     ), NULL, yi, yj, yl
                 );
             }
