@@ -12,6 +12,12 @@ namespace fs = std::experimental::filesystem;
 
 namespace lass {
 
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud, const string vn) {
+    pcl::visualization::CloudViewer viewer(vn.c_str());
+    viewer.showCloud(cloud);
+    while(!viewer.wasStopped()){}
+}
+
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const string vn) {
     pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer.showCloud(cloud);
@@ -156,6 +162,320 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
     cout << ncam << " cameras; " << npoint << " 3D points; " << nproj << " projections\n";
 
     return true;
+}
+
+bool load_sequences(const char *fn, vector<string>& seqs) {
+    ifstream in(fn);
+    CHECK(fs::exists(fn)) << fn << " not exists" << endl;
+
+    while (!in.eof()) {
+        string seq;
+        in >> seq;
+        if (seq == "") {
+            continue;
+        }
+        seqs.emplace_back(seq);
+    }
+}
+
+bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Eigen::Matrix4f>& training_es, std::vector<Eigen::Matrix4f>& test_es) {
+    fs::path base_path_str{base_path};
+    string scene_str(scene), trainingset("TrainSplit.txt"), testset("TestSplit.txt");
+    int frame_number;
+    if (strcmp(scene, "stairs") == 0) {
+        frame_number = 500;
+    } else {
+        frame_number = 1000;
+    }
+
+    string training_fn = (base_path_str / scene_str / trainingset).string();
+    string test_fn = (base_path_str / scene_str / testset).string();
+    vector<string> training_sequences, test_sequences;
+
+    load_sequences(training_fn.c_str(), training_sequences);
+    load_sequences(test_fn.c_str(), test_sequences);
+
+    /*
+        The matrix stored in file is camera-to-world.
+        We need world-to-camera.
+    */
+    stringstream s;
+    s.fill('0');
+    for (auto& seq : training_sequences) {
+        for (int idx = 0; idx < frame_number; idx++) {
+            s.str("");
+            s << "frame-" << setw(6) << idx << ".pose.txt";
+            auto fn = (base_path_str / scene_str / seq / s.str()).string();
+            ifstream in(fn);
+
+            Eigen::Matrix4f e;
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    in >> e(r, c);
+                }
+            }
+            e = e.inverse();
+            training_es.emplace_back(e);
+        }
+    }
+
+    for (auto& seq : test_sequences) {
+        for (int idx = 0; idx < frame_number; idx++) {
+            s.str("");
+            s << "frame-" << setw(6) << idx << ".pose.txt";
+            auto fn = (base_path_str / scene_str / seq / s.str()).string();
+            ifstream in(fn);
+
+            Eigen::Matrix4f e;
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    in >> e(r, c);
+                }
+            }
+            e = e.inverse();
+            test_es.emplace_back(e);
+        }
+    }
+}
+
+bool load_mhd_file(const char *fn, mhd_structure& data) {
+    ifstream in(fn);
+    string token, equal;
+
+    in >> token >> equal;
+    CHECK(token.compare("NDims") == 0) << "NDims failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> data.ndims;
+
+    in >> token >> equal;
+    CHECK(token.compare("DimSize") == 0) << "DimSize failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> data.dimsize >> data.dimsize >> data.dimsize;
+
+    in >> token >> equal;
+    CHECK(token.compare("Offset") == 0) << "Offset failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> data.offsetx >> data.offsety >> data.offsetz;
+
+    in >> token >> equal;
+    CHECK(token.compare("ElementSpacing") == 0) << "ElementSpacing failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> data.element_spacing >> data.element_spacing >> data.element_spacing;
+
+    in >> token >> equal;
+    CHECK(token.compare("ElementType") == 0) << "ElementType failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> token;
+    CHECK(token.compare("MET_SHORT") == 0) << "MET_SHORT failed to read" << endl;
+
+    in >> token >> equal;
+    CHECK(token.compare("ElementDataFile") == 0) << "ElementDataFile failed to read" << endl;
+    CHECK(equal.compare("=") == 0) << "not equal" << endl;
+    in >> data.data_file;
+}
+
+void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
+    int width = 1024 / 4, height = 1024 / 4;
+    const double depth_min = 0, depth_max = 99999;
+    PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
+
+    m_pcd->points.resize(width * height);
+    vector<double> m_depth(width * height, depth_max);
+
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
+            int loc = -1;
+            double max_d = 0;
+            bool update = true;
+            for (int o1 = -r; o1 <= r; ++o1) {
+                for (int o2 = -r; o2 <= r; ++o2) {
+                    int u = i + o1;
+                    int v = j + o2;
+                    // if (o1 * o1 + o2 * o2 > r * r) {
+                    //     continue;
+                    // }
+                    if (u >= 0 && v >= 0 && u < width && v < height) {
+                        if (depth[u * height + v] > max_d) {
+                            max_d = depth[u * height + v];
+                            loc = u * height + v;
+                        }
+                    }
+                }
+            }
+            // cout << min_d << endl;
+            auto &pt = m_pcd->points[i * height + j];
+            pt.x = pcd->points[i * height + j].x;
+            pt.y = pcd->points[i * height + j].y;
+            pt.z = pcd->points[i * height + j].z;
+
+            if (max_d > 0) {
+                if (update == true) {
+                    // cout << "updadte" << endl;
+                    pt.label = pcd->points[loc].label;
+                    m_depth[i * height + j] = depth[loc];
+                } else {
+                    pt.label = pcd->points[i * height + j].label;
+                    m_depth[i * height + j] = depth[i * height + j];
+                }
+            } else {
+                pt.label = 0; // 0 means none
+            }
+        }
+    }
+    depth = m_depth;
+    pcd = m_pcd;
+}
+
+void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
+    int width = 1024 / 4, height = 1024 / 4;
+    const double depth_max = 999999;
+    PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
+    m_pcd->points.resize(width * height);
+    vector<double> m_depth(width * height, depth_max);
+
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
+            int loc = -1;
+            double min_d = depth_max;
+            bool update = false;
+            for (int o1 = -r; o1 <= r; ++o1) {
+                for (int o2 = -r; o2 <= r; ++o2) {
+                    int u = i + o1;
+                    int v = j + o2;
+                    // if (o1 * o1 + o2 * o2 > r * r) {
+                    //     continue;
+                    // }
+                    if (u >= 0 && v >= 0 && u < width && v < height) {
+                        if (depth[u * height + v] < min_d) {
+                            min_d = depth[u * height + v];
+                            loc = u * height + v;
+                            update = true;
+                        }
+                    }
+                }
+            }
+            // cout << min_d << endl;
+            auto &pt = m_pcd->points[i * height + j];
+            pt.x = pcd->points[i * height + j].x;
+            pt.y = pcd->points[i * height + j].y;
+            pt.z = pcd->points[i * height + j].z;
+            if (min_d > 0 && min_d < depth_max) {
+                if (update == true) {
+                    // cout << "updadte" << endl;
+                    pt.label = pcd->points[loc].label;
+                    m_depth[i * height + j] = depth[loc];
+                }
+                else {
+                    pt.label = pcd->points[i * height + j].label;
+                    m_depth[i * height + j] = depth[i * height + j];
+                }
+            } else {
+                pt.label = 0;
+            }
+        }
+    }
+    depth = m_depth;
+    pcd = m_pcd;
+}
+
+void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth) {
+    map<int, int> m_map;
+    const int pixel_number = depth.size();
+    const int threshold =  pixel_number * 0.0001;
+    LOG(INFO) << "threshold = " << threshold << endl;
+    LOG(INFO) << "pixel number = " << pixel_number << endl;
+
+    for (int i = 0; i < pixel_number; i++) {
+        auto& label = pcd->points[i].label;
+        if (label == 0) {
+            depth[i] = 999999;
+        } 
+        m_map[label]++;
+    }
+    for (int i = 0; i < pixel_number; ++i) {
+        auto& label = pcd->points[i].label;
+        if (m_map[label] <= threshold) {
+            label = 0;
+            depth[i] = 999999;
+        }
+    }
+    Dilate(pcd, depth, 7);
+    Erode(pcd, depth, 7);
+    // m_map.clear();
+    // for (int i = 0; i < pixel_number; ++i) {
+    //     auto& label = pcd->points[i].label;
+    //     if (label == 0) {
+    //         depth[i] = 99999;
+    //     }
+    //     m_map[label]++;
+    // }
+    // for (int i = 0; i < depth.size(); ++i) {
+    //     auto& label = pcd->points[i].label;
+    //     if (m_map[label] <= threshold) {
+    //         label = 0;
+    //         depth[i] = 99999;
+    //     }
+    // }
+}
+
+void fillHoles(cv::Mat &img) {
+    int top = img.rows, bottom = 0;
+    int left = img.cols, right = 0;
+    vector<pair<int, int>> idx;
+    const double max_angle_thres = 90;
+    const int bin_num = 72;
+    for (int i = 0; i < img.rows; ++i) {
+        for (int j = 0; j < img.cols; ++j) {
+            if (img.at<Vec3b>(i, j) != Vec3b(0, 0 ,0)) {
+                top = min(i, top);
+                bottom = max(i, bottom);
+                left = min(j, left);
+                right = max(j, right);
+                idx.emplace_back(make_pair(i, j));
+            }
+        }
+    }
+    if (idx.size() < 10) {
+        for (size_t i = 0; i < idx.size(); ++i) {
+            int u = idx[i].first, v = idx[i].second;
+            img.at<Vec3b>(u, v) = Vec3b(0, 0, 0);
+        }
+        return;
+    }
+    for (int i = top; i <= bottom; ++i) {
+        for (int j = left; j <= right; ++j) {
+            if (img.at<Vec3b>(i, j) == Vec3b(0, 0, 0)) {
+                vector<int> bins;
+                for (int i = 0; i < bin_num; ++i) {
+                    bins.emplace_back(0);
+                }
+                for (size_t k = 0; k < idx.size(); ++k) {
+                    int u = idx[k].first, v = idx[k].second;
+                    int y = u - i, x = v - j;
+                    double theta = (atan2(y, x) + M_PI) * 180 / M_PI;
+                    if (theta == 360) {
+                        theta = 0;
+                    }
+                    bins[(int)(theta / 5)]++;
+                }
+                int cnt = 0;
+                int max_angle = 0;
+                for (int i = 0; i < bin_num * 2; ++i) {
+                    if (bins[i % bin_num] == 0) {
+                        ++cnt;
+                    } else {
+                        if (cnt != 0) {
+                            max_angle = max(max_angle, cnt * (360 / bin_num));
+                        }
+                        cnt = 0;
+                    }
+                }
+                if (max_angle < max_angle_thres) {
+                    img.at<Vec3b>(i, j) = img.at<Vec3b>(idx[0].first, idx[0].second);
+                }
+            }
+        }
+    }
 }
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize) {
@@ -377,6 +697,51 @@ PointCloud<PointXYZRGB>::Ptr filter_outliers_via_radius(PointCloud<PointXYZRGB>:
     LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
     LOG(INFO) << "filtered number = " << pcd->points.size() - cloud_filtered->points.size() << endl;
     return cloud_filtered;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr filter_outliers_via_stats(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, float stddev, int meanK, bool set_negative) {
+    pcl::PointCloud<PointXYZRGB>::Ptr cloud = pcd;
+    pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
+
+    LOG(INFO) << "Statistical filtering outliers..." << std::endl;
+    LOG(INFO) << stddev << ", " << meanK << std::endl;
+
+    StatisticalOutlierRemoval<PointXYZRGB> sor;
+    sor.setInputCloud(cloud);
+    sor.setMeanK(meanK);
+    sor.setStddevMulThresh(stddev);
+    sor.setNegative(set_negative);
+    sor.filter(*cloud_filtered);
+
+    LOG(INFO) << "before filtering:\tpoint number = " << pcd->points.size() << endl;
+    LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
+    LOG(INFO) << "filtered number = " << pcd->points.size() - cloud_filtered->points.size() << endl;
+    return cloud_filtered;
+}
+
+std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, double grid_resolution) {
+    PointXYZ min_value{1000000, 1000000, 1000000}, max_value{-1000000, -1000000, -1000000}, range;
+    vector<int> labels;
+    labels.resize(pcd->points.size());
+
+    for (auto& pt: pcd->points) {
+        min_value.x = std::min(min_value.x, pt.x);
+        min_value.y = std::min(min_value.y, pt.y);
+
+        max_value.x = std::max(max_value.x, pt.x);
+        max_value.y = std::max(max_value.y, pt.y);
+    }
+
+    range.x = max_value.x - min_value.x;
+    range.y = max_value.y - min_value.y;
+
+    int x_division = static_cast<int>(range.x / grid_resolution) + 1, y_division = static_cast<int>(range.y / grid_resolution) + 1;
+    double x_resolution = range.x / x_division, y_resolution = range.y / y_division;
+    for(int idx = 0; idx < labels.size(); idx++) {
+        auto& pt = pcd->points[idx];
+
+        labels[idx] = static_cast<int>(pt.x / x_resolution) * y_division + static_cast<int>(pt.y / y_resolution);
+    }
 }
 
 }

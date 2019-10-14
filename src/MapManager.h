@@ -1,6 +1,8 @@
 #ifndef MAPMANAGER_H
 #define MAPMANAGER_H
 
+#include <pcl/io/ply_io.h>
+
 #include "utils.h"
 #include "json.h"
 
@@ -11,8 +13,14 @@ typedef enum LandmarkType {
     REMOVED,
     LANDMARK,
     BACKGROUND,
+    HIGHLIGHT,
     NUMBER
 } LandmarkType;
+
+typedef struct camera_intrinsics {
+    float cx, cy, fx, fy;
+    int width, height;
+} camera_intrinsics;
 
 class MapManager {
 private:
@@ -22,29 +30,40 @@ private:
 
     void initialize_viewer();
 public:
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  m_pcd;                                   // point cloud
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  m_pcd;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;                                   // point cloud
     std::vector<bool>                       m_show_flag;
-    std::vector<int>                        m_semantic_label, m_keypoints_label;
+    std::vector<int>                        m_semantic_label, m_keypoints_label, m_render_label;
     std::vector<LandmarkType>               m_landmark_label;
+    std::vector<pcl::PointIndices>          m_clusters;
     std::vector<int>                        m_cluster_label;
     pcl::PointIndices::Ptr                  m_index_of_landmark, m_index_of_background, m_index_of_removed, m_index_of_unknown;
 
     bool m_use_flag = false;
+    bool m_show_target_pcd = false;
     pcl::visualization::PCLVisualizer::Ptr m_viewer;                                // viewer
+    int max_target_label;
     
     std::vector<std::string> m_semantic_names;
     std::vector<std::string> m_landmarks_semantic_names, m_background_semantic_names, m_removed_semantic_names;
-    // std::vector<pcl::PointIndices>} m_clusters;
+    // std::vector<pcl::PointIndices> m_clusters;
+
+    std::vector<Eigen::Matrix4f> m_camera_extrinsics;
 
     MapManager();
     MapManager(const std::string& dir); //< load from serialized directory
-    ~MapManager() {}
+    ~MapManager() {
+    }
 
     void filter_outliers(float radius=2, int k=5);
+    void filter_landmarks_through_background(int knn=20, float ratio=0.5);
+    void filter_supervoxels_through_background();
     void filter_useless_semantics_from_json(const std::string& fn);
+    void filter_minor_segmentations(int number_threshold=20);
 
     void load_nvm_pcl(const std::string& fn);
     void load_pcd_pcl(const std::string& fn);
+    void load_ply_pcl(const std::string& fn);
     void load_semantic_json(const std::string& fn);
     void load_parameters(const std::string& fn);
     void load_from_dir(const std::string& dir);
@@ -54,14 +73,26 @@ public:
     void export_to_dir(const std::string& dir);
 
     void figure_out_landmarks_annotation();
+    void grid_landmark_clustering();
+    void euclidean_landmark_clustering();
+    void supervoxel_landmark_clustering(float voxel_resolution = 1.0, float seed_resolution = 21.0, float spatial_importance = 1, float color_importance = 0, float normal_importance = 0);
+
+    void raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, float resolution = 1.0f, bool depthDE = true);
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_landmarks();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_background();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_removed();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_unknown();
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
+
+    void set_view_target_pcd(bool flag) {
+        m_show_target_pcd = flag;
+    }
 
     void dye_through_semantics();
     void dye_through_clusters();
     void dye_through_landmarks();
+    void dye_through_render();
     void update_view();
     void show_point_cloud();
 };
