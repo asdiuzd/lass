@@ -38,6 +38,7 @@ public:
     std::vector<pcl::PointIndices>          m_clusters;
     std::vector<int>                        m_cluster_label;
     pcl::PointIndices::Ptr                  m_index_of_landmark, m_index_of_background, m_index_of_removed, m_index_of_unknown;
+    pcl::octree::OctreePointCloudSearch<pcl::PointXYZL> m_octree;
 
     bool m_use_flag = false;
     bool m_show_target_pcd = false;
@@ -77,7 +78,8 @@ public:
     void euclidean_landmark_clustering();
     void supervoxel_landmark_clustering(float voxel_resolution = 1.0, float seed_resolution = 21.0, float spatial_importance = 1, float color_importance = 0, float normal_importance = 0);
 
-    void raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, float resolution = 1.0f, bool depthDE = true);
+    void prepare_octree_for_target_pcd(float resolution = 1.0f);
+    void raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE = true, int stride = 7, float scale = 4);
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_landmarks();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_background();

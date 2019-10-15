@@ -69,12 +69,14 @@ void MapManager::update_view() {
 
 MapManager::MapManager():
     m_pcd(new PointCloud<PointXYZRGB>()),
+    m_octree(1.0f),
     m_viewer(new visualization::PCLVisualizer()) {
     initialize_viewer();
 }
 
 MapManager::MapManager(const std::string& dir):
     m_pcd(new PointCloud<PointXYZRGB>()),
+    m_octree(1.0f),
     m_viewer(new visualization::PCLVisualizer()) {
     LOG(INFO) << "MapManager c'tor from: " << dir << endl;
     initialize_viewer();
@@ -300,9 +302,16 @@ void MapManager::figure_out_landmarks_annotation() {
     }
 }
 
+void MapManager::prepare_octree_for_target_pcd(float resolution) {
+    cout << "Construct octree" << endl;
+    m_octree.setResolution(resolution);
+    m_octree.setInputCloud(m_target_pcd);
+    m_octree.addPointsFromInputCloud();
+}
+
 // extrinsics: world to camera
-void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, float resolution, bool depthDE) {
-    LOG(INFO) << "start raycasting" << endl;
+void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE, int stride, float scale) {
+    // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
     // const float fx = 400 / scale, fy = 400 / scale;
@@ -318,10 +327,6 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
     vector<vector<Eigen::Vector3f>> directions(width, vector<Eigen::Vector3f>(height));
     vector<double> depth(width * height, 999999);
 
-    cout << "Construct octree" << endl;
-    octree::OctreePointCloudSearch<PointXYZL> octree(resolution);
-    octree.setInputCloud(m_target_pcd);
-    octree.addPointsFromInputCloud();
     int hit_count = 0;
 
     for (int u = 0; u < width; u++) {
@@ -338,7 +343,7 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
             d = d - origin;
             d.normalize();
 
-            octree.getIntersectedVoxelIndices(origin, d, k_indices, 1);
+            m_octree.getIntersectedVoxelIndices(origin, d, k_indices, 1);
             if (k_indices.size() > 0) {
                 auto &idx = k_indices[0];
                 if (idx >= m_target_pcd->points.size()) {
@@ -358,7 +363,7 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
     }
 
     if (depthDE) {
-        depth_based_DE(pcd, depth);
+        depth_based_DE(pcd, depth, intrinsics, stride, scale);
     }
 }
 
