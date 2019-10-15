@@ -24,6 +24,7 @@
 #include <glog/logging.h>
 
 #include "Camera.h"
+#include "MapManager.h"
 
 
 namespace lass {
@@ -57,7 +58,7 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
 bool load_mhd_file(const char *fn, mhd_structure& data);
 // read nvm from file ifn and write pcd to file ofn
 bool load_sequences(const char *fn, std::vector<std::string>& seqs);
-bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Eigen::Matrix4f>& training_es, std::vector<Eigen::Matrix4f>& test_es);
+bool load_7scenes_poses(const std::string base_path, const std::string scene, std::vector<Eigen::Matrix4f>& es, std::vector<std::string>& fns, std::vector<std::string>& relative_fns);
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize=false);
 // transfer nvm to pcd
@@ -76,9 +77,9 @@ inline T euclidean_distance(T x, T y, T z) {
     return sqrt(x*x + y*y + z*z);
 }
 
-void Dilate(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r);
-void Erode(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r);
-void depth_based_DE(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth);
+void Dilate(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale = 4);
+void Erode(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale = 4);
+void depth_based_DE(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, const camera_intrinsics& intrinsics, int stride = 7, float scale = 4);
 void fillHoles(cv::Mat &img);
 
 std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, double grid_resolution=5.0);

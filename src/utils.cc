@@ -178,11 +178,11 @@ bool load_sequences(const char *fn, vector<string>& seqs) {
     }
 }
 
-bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Eigen::Matrix4f>& training_es, std::vector<Eigen::Matrix4f>& test_es) {
+bool load_7scenes_poses(const string base_path, const string scene, std::vector<Eigen::Matrix4f>& es, vector<string>& fns, std::vector<std::string>& relative_fns) {
     fs::path base_path_str{base_path};
     string scene_str(scene), trainingset("TrainSplit.txt"), testset("TestSplit.txt");
     int frame_number;
-    if (strcmp(scene, "stairs") == 0) {
+    if (scene.compare("stairs") == 0) {
         frame_number = 500;
     } else {
         frame_number = 1000;
@@ -190,10 +190,10 @@ bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Ei
 
     string training_fn = (base_path_str / scene_str / trainingset).string();
     string test_fn = (base_path_str / scene_str / testset).string();
-    vector<string> training_sequences, test_sequences;
+    vector<string> seqs;
 
-    load_sequences(training_fn.c_str(), training_sequences);
-    load_sequences(test_fn.c_str(), test_sequences);
+    load_sequences(training_fn.c_str(), seqs);
+    load_sequences(test_fn.c_str(), seqs);
 
     /*
         The matrix stored in file is camera-to-world.
@@ -201,12 +201,15 @@ bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Ei
     */
     stringstream s;
     s.fill('0');
-    for (auto& seq : training_sequences) {
+    fns.resize(0);
+    for (auto& seq : seqs) {
         for (int idx = 0; idx < frame_number; idx++) {
             s.str("");
             s << "frame-" << setw(6) << idx << ".pose.txt";
             auto fn = (base_path_str / scene_str / seq / s.str()).string();
             ifstream in(fn);
+            fns.emplace_back(fn);
+            relative_fns.emplace_back(fs::path(seq) / s.str());
 
             Eigen::Matrix4f e;
             for (int r = 0; r < 4; r++) {
@@ -215,25 +218,7 @@ bool load_7scenes_poses(const char* base_path, const char* scene, std::vector<Ei
                 }
             }
             e = e.inverse();
-            training_es.emplace_back(e);
-        }
-    }
-
-    for (auto& seq : test_sequences) {
-        for (int idx = 0; idx < frame_number; idx++) {
-            s.str("");
-            s << "frame-" << setw(6) << idx << ".pose.txt";
-            auto fn = (base_path_str / scene_str / seq / s.str()).string();
-            ifstream in(fn);
-
-            Eigen::Matrix4f e;
-            for (int r = 0; r < 4; r++) {
-                for (int c = 0; c < 4; c++) {
-                    in >> e(r, c);
-                }
-            }
-            e = e.inverse();
-            test_es.emplace_back(e);
+            es.emplace_back(e);
         }
     }
 }
@@ -274,10 +259,12 @@ bool load_mhd_file(const char *fn, mhd_structure& data) {
     in >> data.data_file;
 }
 
-void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
-    int width = 1024 / 4, height = 1024 / 4;
+void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale) {
+    int width = intrinsics.width / scale, height = intrinsics.height / scale;
     const double depth_min = 0, depth_max = 99999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
+
+    cout << "erode: " << width << ", " << height << endl;
 
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
@@ -291,31 +278,32 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
                 for (int o2 = -r; o2 <= r; ++o2) {
                     int u = i + o1;
                     int v = j + o2;
-                    // if (o1 * o1 + o2 * o2 > r * r) {
-                    //     continue;
-                    // }
+                    if (o1 * o1 + o2 * o2 > r * r) {
+                        continue;
+                    }
                     if (u >= 0 && v >= 0 && u < width && v < height) {
-                        if (depth[u * height + v] > max_d) {
-                            max_d = depth[u * height + v];
-                            loc = u * height + v;
+                        if (depth[v * width + u] > max_d) {
+                            max_d = depth[v * width + u];
+                            loc = v * width + u;
                         }
                     }
                 }
             }
             // cout << min_d << endl;
-            auto &pt = m_pcd->points[i * height + j];
-            pt.x = pcd->points[i * height + j].x;
-            pt.y = pcd->points[i * height + j].y;
-            pt.z = pcd->points[i * height + j].z;
+            auto center = j * width + i;
+            auto &pt = m_pcd->points[center];
+            pt.x = pcd->points[center].x;
+            pt.y = pcd->points[center].y;
+            pt.z = pcd->points[center].z;
 
             if (max_d > 0) {
                 if (update == true) {
                     // cout << "updadte" << endl;
                     pt.label = pcd->points[loc].label;
-                    m_depth[i * height + j] = depth[loc];
+                    m_depth[center] = depth[loc];
                 } else {
-                    pt.label = pcd->points[i * height + j].label;
-                    m_depth[i * height + j] = depth[i * height + j];
+                    pt.label = pcd->points[center].label;
+                    m_depth[center] = depth[center];
                 }
             } else {
                 pt.label = 0; // 0 means none
@@ -326,12 +314,14 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
     pcd = m_pcd;
 }
 
-void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
-    int width = 1024 / 4, height = 1024 / 4;
+void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale) {
+    int width = intrinsics.width / scale, height = intrinsics.height / scale;
     const double depth_max = 999999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
+
+    cout << "dilate: " << width << ", " << height << endl;
 
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < height; ++j) {
@@ -342,32 +332,33 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
                 for (int o2 = -r; o2 <= r; ++o2) {
                     int u = i + o1;
                     int v = j + o2;
-                    // if (o1 * o1 + o2 * o2 > r * r) {
-                    //     continue;
-                    // }
+                    if (o1 * o1 + o2 * o2 > r * r) {
+                        continue;
+                    }
                     if (u >= 0 && v >= 0 && u < width && v < height) {
                         if (depth[u * height + v] < min_d) {
-                            min_d = depth[u * height + v];
-                            loc = u * height + v;
+                            min_d = depth[v * width + u];
+                            loc = v * width + u;
                             update = true;
                         }
                     }
                 }
             }
             // cout << min_d << endl;
-            auto &pt = m_pcd->points[i * height + j];
-            pt.x = pcd->points[i * height + j].x;
-            pt.y = pcd->points[i * height + j].y;
-            pt.z = pcd->points[i * height + j].z;
+            auto center = j * width + i;
+            auto &pt = m_pcd->points[center];
+            pt.x = pcd->points[center].x;
+            pt.y = pcd->points[center].y;
+            pt.z = pcd->points[center].z;
             if (min_d > 0 && min_d < depth_max) {
                 if (update == true) {
                     // cout << "updadte" << endl;
                     pt.label = pcd->points[loc].label;
-                    m_depth[i * height + j] = depth[loc];
+                    m_depth[center] = depth[loc];
                 }
                 else {
-                    pt.label = pcd->points[i * height + j].label;
-                    m_depth[i * height + j] = depth[i * height + j];
+                    pt.label = pcd->points[center].label;
+                    m_depth[center] = depth[center];
                 }
             } else {
                 pt.label = 0;
@@ -378,7 +369,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r) {
     pcd = m_pcd;
 }
 
-void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth) {
+void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, const camera_intrinsics& intrinsics, int stride, float scale) {
     map<int, int> m_map;
     const int pixel_number = depth.size();
     const int threshold =  pixel_number * 0.0001;
@@ -399,8 +390,8 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth) {
             depth[i] = 999999;
         }
     }
-    Dilate(pcd, depth, 7);
-    Erode(pcd, depth, 7);
+    Dilate(pcd, depth, stride, intrinsics, scale);
+    Erode(pcd, depth, stride, intrinsics, scale);
     // m_map.clear();
     // for (int i = 0; i < pixel_number; ++i) {
     //     auto& label = pcd->points[i].label;
