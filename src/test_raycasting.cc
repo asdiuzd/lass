@@ -93,6 +93,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
     auto mm = make_shared<MapManager>(argv[3]);
     processing(mm);
+    mm->prepare_octree_for_target_pcd();
 
     Eigen::Vector3f o, d, u;
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
