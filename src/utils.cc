@@ -336,7 +336,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
                         continue;
                     }
                     if (u >= 0 && v >= 0 && u < width && v < height) {
-                        if (depth[u * height + v] < min_d) {
+                        if (depth[v * width + u] < min_d) {
                             min_d = depth[v * width + u];
                             loc = v * width + u;
                             update = true;
