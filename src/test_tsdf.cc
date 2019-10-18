@@ -107,6 +107,21 @@ void processing(shared_ptr<MapManager>& mm) {
 
 }
 
+void visualize_centers(json& j_output, shared_ptr<MapManager>& mm) {
+    PointCloud<PointXYZL>::Ptr center_cloud{new PointCloud<PointXYZL>};
+    for (int idx = 0; idx < j_output["centers"].size(); idx++) {
+        PointXYZL pt;
+        pt.x = j_output["centers"][idx][0].get<float>();
+        pt.y = j_output["centers"][idx][1].get<float>();
+        pt.z = j_output["centers"][idx][2].get<float>();
+        pt.label = mm->max_target_label + 1;
+        center_cloud->points.emplace_back(pt);
+    }
+    mm->m_viewer->addPointCloud(center_cloud, "centers");
+    mm->m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 10, "centers");
+    mm->show_point_cloud();
+}
+
 void test_raycasting_7scenes(int argc, char** argv) {
     /*
         argv[1] - json fn
@@ -163,6 +178,8 @@ void test_raycasting_7scenes(int argc, char** argv) {
     ofstream jout(parameters_output_fn);
     jout << j_output.dump(4);
 
+    visualize_centers(j_output, mm);
+
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
     cv::Mat save_img(cv::Size(width, height), CV_8UC3);
     vector<string> image_fns;
@@ -173,7 +190,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         string image_fn;
         process_path(fn, target_path, image_fn);
 
-        mm->raycasting_target_pcd(e, intrsinsics, pcd, false);
+        mm->raycasting_target_pcd(e, intrsinsics, pcd, true, 6, scale);
 
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
@@ -188,9 +205,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
             }
         }
 
-        cv::imwrite(image_fn, save_img);
-        // cv::imshow("show", save_img);
-        // cv::waitKey(0);
+        // cv::imwrite(image_fn, save_img);
+        cv::imshow("show", save_img);
+        cv::waitKey(0);
     }
 }
 
