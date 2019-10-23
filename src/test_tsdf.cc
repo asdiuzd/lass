@@ -190,7 +190,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         string image_fn;
         process_path(fn, target_path, image_fn);
 
-        mm->raycasting_target_pcd(e, intrsinsics, pcd, true, 6, scale);
+        mm->raycasting_pcd(e, intrsinsics, pcd, true, 6, scale, "target");
 
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {

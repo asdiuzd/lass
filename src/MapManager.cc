@@ -313,7 +313,7 @@ void MapManager::prepare_octree_for_target_pcd(float resolution) {
 }
 
 // extrinsics: world to camera
-void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE, int stride, float scale) {
+void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type) {
     // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
@@ -331,6 +331,14 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
     vector<double> depth(width * height, 999999);
 
     int hit_count = 0;
+    
+    pcl::PointCloud<pcl::PointXYZL>::Ptr raycast_pcd;
+
+    if (raycast_pcd_type == "labeled") {
+        raycast_pcd = m_labeled_pcd;
+    } else if (raycast_pcd_type == "target") {
+        raycast_pcd = m_target_pcd;
+    }
 
     for (int u = 0; u < width; u++) {
         for (int v = 0; v < height; v++) {
@@ -349,15 +357,15 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
             m_octree.getIntersectedVoxelIndices(origin, d, k_indices, 1);
             if (k_indices.size() > 0) {
                 auto &idx = k_indices[0];
-                if (idx >= m_target_pcd->points.size()) {
+                if (idx >= raycast_pcd->points.size()) {
                     LOG(INFO) << "Alert! " << idx << endl;
                 }
                 hit_count++;
-                pt.label = m_target_pcd->points[idx].label;
+                pt.label = raycast_pcd->points[idx].label;
                 depth[v * width + u] = euclidean_distance(
-                    m_target_pcd->points[idx].x - origin[0],
-                    m_target_pcd->points[idx].y - origin[1],
-                    m_target_pcd->points[idx].z - origin[2]
+                    raycast_pcd->points[idx].x - origin[0],
+                    raycast_pcd->points[idx].y - origin[1],
+                    raycast_pcd->points[idx].z - origin[2]
                 );
             } else {
                 pt.label = 0;
@@ -786,6 +794,26 @@ void MapManager::update_camera_trajectory_to_viewer() {
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(cam_centers);
     m_viewer->addPointCloud(cam_centers, colors, "cam_centers");
     m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "cam_centers");
+}
+
+void MapManager::assign_supervoxel_label_to_filtered_pcd() {
+    m_labeled_pcd.reset(new pcl::PointCloud<PointXYZL>());
+    pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
+    kdtree.setInputCloud(m_target_pcd);
+    int K = 1;
+    std::vector<int> point_indices(K);
+    std::vector<float> distances(K);
+    for (int i = 0; i < m_pcd->points.size(); ++i) {
+        const auto &orig_pt = m_pcd->points[i];
+        pcl::PointXYZL pt;
+        pt.x = orig_pt.x;
+        pt.y = orig_pt.y;
+        pt.z = orig_pt.z;
+        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {    
+            pt.label = m_target_pcd->points[point_indices[0]].label;
+            m_labeled_pcd->points.emplace_back(pt);
+        }
+    }
 }
 
 }
