@@ -41,9 +41,10 @@ using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 void processing(shared_ptr<MapManager>& mm) {
+    mm->filter_points_near_cameras(2.0);
     mm->filter_outliers(2, 15);
     mm->filter_landmarks_through_background();
-    mm->supervoxel_landmark_clustering();
+    mm->supervoxel_landmark_clustering(0.7);
 
     mm->set_view_target_pcd(true);
     mm->update_view();
@@ -92,6 +93,9 @@ void test_raycasting_robotcar(int argc, char** argv) {
     LOG(INFO) << "cameras: " << es.size() << endl;
 
     auto mm = make_shared<MapManager>(argv[3]);
+    mm->m_show_camera_extrinsics = true;
+    mm->m_camera_extrinsics = es;
+    mm->m_camera_types = camera_types;
     processing(mm);
     mm->prepare_octree_for_target_pcd();
 
@@ -189,6 +193,9 @@ void test_generate_files_robotcar(int argc, char** argv) {
     LOG(INFO) << "cameras: " << es.size() << endl;
 
     auto mm = make_shared<MapManager>(argv[3]);
+    mm->m_show_camera_extrinsics = true;
+    mm->m_camera_extrinsics = es;
+    mm->m_camera_types = camera_types;
     processing(mm);
 
     vector<PointXYZRGB>    centers{static_cast<unsigned long>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
@@ -224,7 +231,7 @@ void test_generate_files_robotcar(int argc, char** argv) {
     }
 
     ofstream o_label{argv[4]};
-    o_label << j_label;
+    o_label << std::setw(4) << j_label;
 
     LOG(INFO) << "process extrinsics" << endl;
     for (int idx = 0; idx < es.size(); idx++) {
@@ -244,7 +251,7 @@ void test_generate_files_robotcar(int argc, char** argv) {
     }
 
     ofstream o_es{argv[5]};
-    o_es << j_es;
+    o_es << std::setw(4) << j_es;
 
     LOG(INFO) << "finished" << endl;
 }

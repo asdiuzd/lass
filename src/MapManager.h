@@ -29,6 +29,7 @@ private:
     static const std::string parameters_name;
 
     void initialize_viewer();
+    void update_camera_trajectory_to_viewer();
 public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr  m_pcd;
     pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;                                   // point cloud
@@ -42,6 +43,7 @@ public:
 
     bool m_use_flag = false;
     bool m_show_target_pcd = false;
+    bool m_show_camera_extrinsics = false;  // visualize camera trajectory/extrinsics
     pcl::visualization::PCLVisualizer::Ptr m_viewer;                                // viewer
     int max_target_label;
     
@@ -50,6 +52,7 @@ public:
     // std::vector<pcl::PointIndices> m_clusters;
 
     std::vector<Eigen::Matrix4f> m_camera_extrinsics;
+    std::vector<int> m_camera_types;
 
     MapManager();
     MapManager(const std::string& dir); //< load from serialized directory
@@ -61,6 +64,7 @@ public:
     void filter_supervoxels_through_background();
     void filter_useless_semantics_from_json(const std::string& fn);
     void filter_minor_segmentations(int number_threshold=20);
+    void filter_points_near_cameras(float radius);
 
     void load_nvm_pcl(const std::string& fn);
     void load_pcd_pcl(const std::string& fn);

@@ -65,6 +65,9 @@ void MapManager::update_view() {
         m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "cloud");
         m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud");
     }
+    if (m_show_camera_extrinsics) {
+        update_camera_trajectory_to_viewer();
+    }
 }
 
 MapManager::MapManager():
@@ -706,4 +709,83 @@ void MapManager::filter_minor_segmentations(int number_threshold) {
 
     m_target_pcd = remained_pts;
 }
+
+void MapManager::filter_points_near_cameras(float radius) {
+    LOG(INFO) << "Filter points near cameras" << endl;
+    if (m_camera_extrinsics.empty()) {
+        LOG(ERROR) << "m_camera_extrinsics is empty, filter_points_near_cameras would do nothing!";
+        return;
+    }
+    pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
+    kdtree.setInputCloud(m_pcd);
+    std::set<int> outlier_indices_set;
+    for (Eigen::Matrix4f e : m_camera_extrinsics) {
+        // apply rotation fix to extrinsics
+        e(1, 3) *= -1; e(2, 3) *= -1;
+        e(0, 1) *= -1; e(0, 2) *= -1;
+        e(1, 0) *= -1; e(2, 0) *= -1;
+        Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
+        Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
+        std::vector<int> near_indices;
+        std::vector<float> distances;
+        pcl::PointXYZRGB pt;
+        pt.x = pwc.x();
+        pt.y = pwc.y();
+        pt.z = pwc.z();
+        if (kdtree.radiusSearch(pt, radius, near_indices, distances) > 0) {
+            std::copy(near_indices.begin(), near_indices.end(),std::inserter(outlier_indices_set, outlier_indices_set.end()));
+        }
+    }
+    // https://stackoverflow.com/questions/44921987/removing-points-from-a-pclpointcloudpclpointxyzrgb
+    pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+    pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    outliers->indices.insert(outliers->indices.end(), outlier_indices_set.begin(), outlier_indices_set.end());
+    extract.setInputCloud(m_pcd);
+    extract.setIndices(outliers);
+    extract.setNegative(true);
+    extract.filter(*m_pcd);
+    LOG(INFO) << "outlier_indices size " << outlier_indices_set.size();
+}
+
+void MapManager::update_camera_trajectory_to_viewer() {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cam_centers(new PointCloud<PointXYZRGB>());
+    assert(m_camera_types.size() == m_camera_extrinsics.size());
+    for (size_t i = 0; i < m_camera_extrinsics.size(); ++i) {
+        Eigen::Matrix4f e = m_camera_extrinsics[i];
+        int camera_type = m_camera_types[i];
+        // apply rotation fix to extrinsics
+        e(1, 3) *= -1; e(2, 3) *= -1;
+        e(0, 1) *= -1; e(0, 2) *= -1;
+        e(1, 0) *= -1; e(2, 0) *= -1;
+        Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
+        Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
+        pcl::PointXYZRGB pt;
+        pt.x = pwc.x();
+        pt.y = pwc.y();
+        pt.z = pwc.z();
+        pt.r = pt.g = pt.b = 200;
+        cam_centers->points.emplace_back(pt);
+        for (int j = 1; j < 5; ++j) {
+            Eigen::Vector3f pt_forward = qcw.conjugate() * Eigen::Vector3f(0, 0, 0.1 * j) + pwc;
+            Eigen::Vector3i color;
+            color.setZero();
+            assert(camera_type < 3 && camera_type >= 0);
+            color(camera_type) = 200;
+            pcl::PointXYZRGB pt;
+            pt.x = pt_forward.x();
+            pt.y = pt_forward.y();
+            pt.z = pt_forward.z();
+            pt.r = color.x();
+            pt.g = color.y();
+            pt.b = color.z();
+            cam_centers->points.emplace_back(pt);
+        }
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(cam_centers);
+    m_viewer->addPointCloud(cam_centers, colors, "cam_centers");
+    m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "cam_centers");
+}
+
 }
