@@ -41,16 +41,16 @@ using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 void processing(shared_ptr<MapManager>& mm) {
-    mm->filter_points_near_cameras(2.0);
-    mm->filter_outliers(2, 15);
+    mm->filter_outliers(2, 10);
     mm->filter_landmarks_through_background();
-    mm->supervoxel_landmark_clustering();
+    mm->supervoxel_landmark_clustering(0.7f);
 
     mm->set_view_target_pcd(true);
     mm->update_view();
     mm->show_point_cloud();
 
     mm->filter_supervoxels_through_background();
+    mm->filter_points_near_cameras(2.0);
     mm->update_view();
     mm->show_point_cloud();
 
@@ -104,6 +104,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     cv::Mat save_img(cv::Size(width, height), CV_8UC3);
     cv::Vec3b color;
 
+    int res = system("mkdir -p left right rear");
     for (int idx = 0; idx < es.size(); idx++) {
         auto& e = es[idx];
         auto& camera_type = camera_types[idx];
@@ -257,6 +258,6 @@ void test_generate_files_robotcar(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    // test_raycasting_robotcar(argc, argv);
-    test_generate_files_robotcar(argc, argv);
+    test_raycasting_robotcar(argc, argv);
+    // test_generate_files_robotcar(argc, argv);
 }
