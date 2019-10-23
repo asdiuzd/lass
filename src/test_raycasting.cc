@@ -151,6 +151,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
         // cv::imshow("show2", save_img);
         // cv::waitKey(0);
         LOG(INFO) << "image fn: " << image_fn << endl;
+        LOG(INFO) << "Progress: " << idx << "/" << es.size() << endl;
         cv::imwrite(image_fn, save_img);
         // cv::imshow("show", save_img);
         // cv::waitKey(0);
@@ -253,6 +254,26 @@ void test_generate_files_robotcar(int argc, char** argv) {
 
     ofstream o_es{argv[5]};
     o_es << std::setw(4) << j_es;
+
+
+    // train test split
+    std::vector<std::string> train_list, test_list;
+    for (int idx = 0; idx < es.size(); idx++) {
+        auto& e = es[idx];
+        auto& camera_type = camera_types[idx];
+        auto& image_fn = image_fns[idx];
+        if (idx % 10 >= 8) {
+            test_list.push_back(image_fn);
+        } else {
+            train_list.push_back(image_fn);
+        }
+    }
+    ofstream o_train_list{"train_list.json"};
+    json j_train_list = train_list;
+    o_train_list << std::setw(4) << j_train_list;
+    ofstream o_test_list{"test_list.json"};
+    json j_test_list = test_list;
+    o_test_list << std::setw(4) << j_test_list;
 
     LOG(INFO) << "finished" << endl;
 }
