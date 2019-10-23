@@ -637,10 +637,17 @@ void MapManager::filter_landmarks_through_background(int knn, float ratio) {
    }
 }
 
-void MapManager::filter_supervoxels_through_background() {
+void MapManager::filter_supervoxels_through_background(const std::string &pcd_type) {
+    LOG(INFO) << __func__ << endl;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
+    if (pcd_type == "labeled") {
+        pcd_ptr = m_labeled_pcd;
+    } else if (pcd_type == "target") {
+        pcd_ptr = m_target_pcd;
+    }
     auto background_pcd = extract_background();
     PointXYZL min_pt, max_pt;
-    getMinMax3D(*m_target_pcd, min_pt, max_pt);
+    getMinMax3D(*pcd_ptr, min_pt, max_pt);
     float resolution = 1.0;
     int width = (max_pt.x - min_pt.x) / resolution + 1, height = (max_pt.y - min_pt.y) / resolution + 1;
     vector<vector<unsigned char>> map(width, vector<unsigned char>(height, 0));
@@ -667,8 +674,8 @@ void MapManager::filter_supervoxels_through_background() {
    }
 
    PointIndices::Ptr valid_indices{new PointIndices};
-   for (int idx = 0; idx < m_target_pcd->points.size(); idx++) {
-       auto& pt = m_target_pcd->points[idx];
+   for (int idx = 0; idx < pcd_ptr->points.size(); idx++) {
+       auto& pt = pcd_ptr->points[idx];
 
        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
        if (map[x][y] == 2) {
@@ -681,24 +688,35 @@ void MapManager::filter_supervoxels_through_background() {
     PointCloud<PointXYZL>::Ptr    valid_pts{new PointCloud<PointXYZL>()};
     ExtractIndices<PointXYZL>     extractor;
 
-    extractor.setInputCloud(m_target_pcd);
+    extractor.setInputCloud(pcd_ptr);
     extractor.setIndices(valid_indices);
     extractor.filter(*valid_pts);
-    m_target_pcd = valid_pts;
-
+    if (pcd_type == "labeled") {
+        m_labeled_pcd = valid_pts;
+    } else if (pcd_type == "target") {
+        m_target_pcd = valid_pts;
+    }
 }
 
-void MapManager::filter_minor_segmentations(int number_threshold) {
+void MapManager::filter_minor_segmentations(int number_threshold, const std::string &pcd_type) {
+    LOG(INFO) << __func__ << endl;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
+    if (pcd_type == "labeled") {
+        pcd_ptr = m_labeled_pcd;
+    } else if (pcd_type == "target") {
+        pcd_ptr = m_target_pcd;
+    }
+
     int max_label = std::max_element(
-                        m_target_pcd->points.begin(),
-                        m_target_pcd->points.end(),
+                        pcd_ptr->points.begin(),
+                        pcd_ptr->points.end(),
                         [&](const PointXYZL &p1, const PointXYZL &p2) {
                             return p1.label < p2.label;
                         })
                         ->label + 1;
 
     vector<int> label_counter(max_label, 0), label_mapping(max_label, 0);
-    for (auto& p: m_target_pcd->points) {
+    for (auto& p: pcd_ptr->points) {
         label_counter[p.label]++;
     }
 
@@ -721,9 +739,9 @@ void MapManager::filter_minor_segmentations(int number_threshold) {
     LOG(INFO) << "size of label 0 = " << label_counter[0] << endl;
 
     PointCloud<PointXYZL>::Ptr remained_pts{new PointCloud<PointXYZL>};
-    // remained_pts->points.reserve(m_target_pcd->points.size());
+    // remained_pts->points.reserve(pcd_ptr->points.size());
 
-    for (auto& p:m_target_pcd->points) {
+    for (auto& p:pcd_ptr->points) {
         auto& label = p.label;
         if (label_counter[label] > number_threshold) {
             label = label_mapping[label];
@@ -731,11 +749,15 @@ void MapManager::filter_minor_segmentations(int number_threshold) {
         }
     }
 
-    m_target_pcd = remained_pts;
+    if (pcd_type == "labeled") {
+        m_labeled_pcd = remained_pts;
+    } else if (pcd_type == "target") {
+        m_target_pcd = remained_pts;
+    }
 }
 
 void MapManager::filter_points_near_cameras(float radius) {
-    LOG(INFO) << "Filter points near cameras" << endl;
+    LOG(INFO) << __func__ << endl;
     if (m_camera_extrinsics.empty()) {
         LOG(ERROR) << "m_camera_extrinsics is empty, filter_points_near_cameras would do nothing!";
         return;
@@ -813,7 +835,7 @@ void MapManager::update_camera_trajectory_to_viewer() {
 }
 
 void MapManager::assign_supervoxel_label_to_filtered_pcd() {
-    LOG(INFO) << "assign_supervoxel_label_to_filtered_pcd" << endl;
+    LOG(INFO) << __func__ << endl;
     m_labeled_pcd.reset(new pcl::PointCloud<PointXYZL>());
     pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
     kdtree.setInputCloud(m_target_pcd);

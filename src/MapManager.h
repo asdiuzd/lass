@@ -64,9 +64,11 @@ public:
 
     void filter_outliers(float radius=2, int k=5);
     void filter_landmarks_through_background(int knn=20, float ratio=0.5);
-    void filter_supervoxels_through_background();
+    // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
+    void filter_supervoxels_through_background(const std::string &pcd_type = "target");
     void filter_useless_semantics_from_json(const std::string& fn);
-    void filter_minor_segmentations(int number_threshold=20);
+    // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
+    void filter_minor_segmentations(int number_threshold=20, const std::string &pcd_type = "target");
     void filter_points_near_cameras(float radius);
 
     void load_nvm_pcl(const std::string& fn);
@@ -89,7 +91,7 @@ public:
 
     void prepare_octree_for_target_pcd(float resolution = 1.0f);
     // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
-    void raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE = true, int stride = 7, float scale = 1, const std::string &raycast_pcd_type = "labeled");
+    void raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE = true, int stride = 7, float scale = 1, const std::string &raycast_pcd_type = "target");
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_landmarks();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_background();
