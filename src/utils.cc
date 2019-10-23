@@ -264,7 +264,7 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const 
     const double depth_min = 0, depth_max = 99999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
 
-    cout << "erode: " << width << ", " << height << endl;
+    // cout << "erode: " << width << ", " << height << endl;
 
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
@@ -321,7 +321,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
 
-    cout << "dilate: " << width << ", " << height << endl;
+    // cout << "dilate: " << width << ", " << height << endl;
 
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < height; ++j) {
@@ -373,8 +373,8 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
     map<int, int> m_map;
     const int pixel_number = depth.size();
     const int threshold =  pixel_number * 0.0001;
-    LOG(INFO) << "threshold = " << threshold << endl;
-    LOG(INFO) << "pixel number = " << pixel_number << endl;
+    // LOG(INFO) << "threshold = " << threshold << endl;
+    // LOG(INFO) << "pixel number = " << pixel_number << endl;
 
     for (int i = 0; i < pixel_number; i++) {
         auto& label = pcd->points[i].label;

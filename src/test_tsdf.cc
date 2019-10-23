@@ -97,7 +97,7 @@ void processing(shared_ptr<MapManager>& mm) {
     // mm->show_point_cloud();
 
     mm->supervoxel_landmark_clustering(0.015, 0.4, 1.0, 0.0, 0.0);
-    mm->set_view_target_pcd(true);
+    mm->set_view_type(1);
     mm->update_view();
     // mm->show_point_cloud();
     

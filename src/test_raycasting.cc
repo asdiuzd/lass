@@ -45,7 +45,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->filter_landmarks_through_background();
     mm->supervoxel_landmark_clustering(0.7f);
 
-    mm->set_view_target_pcd(true);
+    mm->set_view_type(1);
     mm->update_view();
     mm->show_point_cloud();
 
@@ -59,6 +59,9 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->show_point_cloud();
 
     mm->assign_supervoxel_label_to_filtered_pcd();
+    mm->set_view_type(2);
+    mm->update_view();
+    mm->show_point_cloud();
 }
 
 void test_raycasting_robotcar(int argc, char** argv) {
@@ -143,7 +146,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
         LOG(INFO) << "process extrinsics" << endl;
         for (int idx = 0; idx < es.size(); idx++) {
-            auto& e = es[idx];
+            Eigen::Matrix4f e = es[idx];
             auto& camera_type = camera_types[idx];
             auto& image_fn = image_fns[idx];
 
@@ -195,7 +198,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
         int res = system("mkdir -p left right rear");
         for (int idx = 0; idx < es.size(); idx++) {
-            auto& e = es[idx];
+            Eigen::Matrix4f e = es[idx];
             auto& camera_type = camera_types[idx];
             auto& image_fn = image_fns[idx];
 
@@ -233,8 +236,10 @@ void test_raycasting_robotcar(int argc, char** argv) {
                     }
                 }
             }
-            LOG(INFO) << "image fn: " << image_fn << endl;
-            LOG(INFO) << "Progress: " << idx << "/" << es.size() << endl;
+            // LOG(INFO) << "image fn: " << image_fn << endl;
+            fprintf(stdout, "\rProgress: %d / %zu", idx, es.size());
+            fflush(stdout);
+
             cv::imwrite(image_fn, save_img);
             // cv::imshow("show", save_img);
             // cv::waitKey(0);
@@ -246,5 +251,4 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     test_raycasting_robotcar(argc, argv);
-    // test_generate_files_robotcar(argc, argv);
 }

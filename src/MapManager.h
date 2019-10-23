@@ -32,8 +32,8 @@ private:
     void update_camera_trajectory_to_viewer();
 public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr  m_pcd;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;   // supervoxel point cloud
     pcl::PointCloud<pcl::PointXYZL>::Ptr m_labeled_pcd;  // from m_pcd to supervoxel label
-    pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;                                   // point cloud
     std::vector<bool>                       m_show_flag;
     std::vector<int>                        m_semantic_label, m_keypoints_label, m_render_label;
     std::vector<LandmarkType>               m_landmark_label;
@@ -42,8 +42,10 @@ public:
     pcl::PointIndices::Ptr                  m_index_of_landmark, m_index_of_background, m_index_of_removed, m_index_of_unknown;
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZL> m_octree;
 
-    bool m_use_flag = false;
-    bool m_show_target_pcd = false;
+    // 0: show m_pcd
+    // 1: show m_target_pcd
+    // 2: show m_labeled_pcd
+    int m_view_type = 0;
     bool m_show_camera_extrinsics = false;  // visualize camera trajectory/extrinsics
     pcl::visualization::PCLVisualizer::Ptr m_viewer;                                // viewer
     int max_target_label;
@@ -95,8 +97,11 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_unknown();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
 
-    void set_view_target_pcd(bool flag) {
-        m_show_target_pcd = flag;
+    // 0: show m_pcd
+    // 1: show m_target_pcd
+    // 2: show m_labeled_pcd
+    void set_view_type(int type) {
+        m_view_type = type;
     }
 
     void dye_through_semantics();

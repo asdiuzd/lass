@@ -41,8 +41,10 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void
     } else if (event.getKeySym() == "n" && event.keyDown()) {
         stop_view = true;
     } else if (event.getKeySym() == "t" && event.keyDown()) {
-        LOG(INFO) << "Toggle use show flag" << endl;
-        mm->m_use_flag = !mm->m_use_flag;
+        // LOG(INFO) << "Toggle use show flag" << endl;
+        // maybe we need to use singleton
+        // m_view_type = (++m_view_type) % 3;
+        
     }
 }
 
@@ -55,15 +57,29 @@ void MapManager::initialize_viewer() {
 
 void MapManager::update_view() {
     m_viewer->removeAllPointClouds();
-    if (m_show_target_pcd) {
-        m_viewer->setBackgroundColor (0, 0, 0);
-        m_viewer->addPointCloud (m_target_pcd, "labeled voxels");
-        m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled voxels");
-        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled voxels");
-    } else {
-        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
-        m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "cloud");
-        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud");
+    m_viewer->setBackgroundColor (0, 0, 0);
+    switch (m_view_type) {
+        case 0: {
+            pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
+            m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pcd");
+            break;
+        }
+        case 1: {
+            m_viewer->addPointCloud (m_target_pcd, "target_pcd");
+            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
+            break;
+        }
+        case 2: {
+            m_viewer->addPointCloud (m_labeled_pcd, "labeled_pcd");
+            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled_pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled_pcd");
+            break;
+        }
+        default: {
+
+        }
     }
     if (m_show_camera_extrinsics) {
         update_camera_trajectory_to_viewer();
@@ -797,6 +813,7 @@ void MapManager::update_camera_trajectory_to_viewer() {
 }
 
 void MapManager::assign_supervoxel_label_to_filtered_pcd() {
+    LOG(INFO) << "assign_supervoxel_label_to_filtered_pcd" << endl;
     m_labeled_pcd.reset(new pcl::PointCloud<PointXYZL>());
     pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
     kdtree.setInputCloud(m_target_pcd);
