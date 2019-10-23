@@ -44,7 +44,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->filter_points_near_cameras(2.0);
     mm->filter_outliers(2, 15);
     mm->filter_landmarks_through_background();
-    mm->supervoxel_landmark_clustering(0.7);
+    mm->supervoxel_landmark_clustering();
 
     mm->set_view_target_pcd(true);
     mm->update_view();
@@ -97,7 +97,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     mm->m_camera_extrinsics = es;
     mm->m_camera_types = camera_types;
     processing(mm);
-    mm->prepare_octree_for_target_pcd();
+    mm->prepare_octree_for_target_pcd(0.5f);
 
     Eigen::Vector3f o, d, u;
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
