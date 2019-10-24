@@ -143,7 +143,7 @@ void MapManager::filter_and_clustering() {
             const auto &indices = m_clusters[i_cluster].indices;
             // only process supervoxel over large clusters
             if (indices.size() < cluster_size_th) continue;
-            SupervoxelClustering<PointXYZRGB> super(1.0, 21.0);
+            SupervoxelClustering<PointXYZRGB> super(1.0, 42.0);
             map<uint32_t, Supervoxel<PointXYZRGB>::Ptr> supervoxel_clusters;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr local_pcd(new pcl::PointCloud<pcl::PointXYZRGB>());
             for (const auto &idx : indices) {
