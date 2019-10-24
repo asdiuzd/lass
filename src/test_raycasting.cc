@@ -41,7 +41,8 @@ using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 void processing(shared_ptr<MapManager>& mm) {
-    mm->filter_outliers(2, 10);
+    // mm->filter_outliers(2, 10);
+    mm->filter_outliers(0.01, 0);
     // mm->filter_landmarks_through_background();
     mm->dye_through_render();
     mm->update_view();
@@ -212,7 +213,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     
     /* scope: raycasting */ 
     {
-        mm->prepare_octree_for_target_pcd(1.f);
+        mm->prepare_octree_for_target_pcd(0.7f);
 
         Eigen::Vector3f o, d, u;
         PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
@@ -229,17 +230,18 @@ void test_raycasting_robotcar(int argc, char** argv) {
             e(0, 1) *= -1; e(0, 2) *= -1;
             e(1, 0) *= -1; e(2, 0) *= -1;
 
+            const float de_stride = 5;
             switch (camera_type) {
             case 0:
-                mm->raycasting_pcd(e, left_intrsinsics, pcd, "labeled");
+                mm->raycasting_pcd(e, left_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
             
             case 1:
-                mm->raycasting_pcd(e, rear_intrsinsics, pcd, "labeled");
+                mm->raycasting_pcd(e, rear_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
             
             case 2:
-                mm->raycasting_pcd(e, right_intrsinsics, pcd, "labeled");
+                mm->raycasting_pcd(e, right_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
 
             default:

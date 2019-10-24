@@ -11,6 +11,7 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <random>
 #include <opencv2/opencv.hpp>
 
 #include "utils.h"
@@ -52,7 +53,7 @@ void MapManager::filter_and_clustering() {
     }
     // filter points near cameras
     {
-        const float radius = 5.0;
+        const float radius = 3.0;
         LOG(INFO) << __func__ << endl;
         LOG(INFO) << "filter points near cameras";
         if (m_camera_extrinsics.empty()) {
@@ -117,17 +118,71 @@ void MapManager::filter_and_clustering() {
         m_cluster_label.clear();
 
         m_cluster_label.resize(curr_pcd->points.size(), -1);
-        int outlier_clusters = 0;
         for (int label = 0; label < m_clusters.size(); label++) {
             auto &indices = m_clusters[label];
             for (auto &idx: indices.indices) {
                 m_cluster_label[idx] = label;
             }
         }
-        for (auto &l : m_cluster_label) {
-            if (l < 0) outlier_clusters++;
+    }
+
+    // supervoxel for large clusters
+    {
+        int curr_valid_label = m_clusters.size();
+        // cluster larger than cluster_size_th will be performed supervoxel
+        const int cluster_size_th = 700;
+        int count_process = 0;
+        for (int i_cluster = 0; i_cluster < m_clusters.size(); ++i_cluster) {
+            if (m_clusters[i_cluster].indices.size() >= cluster_size_th) {
+                count_process++;
+            }
         }
+        LOG(INFO) << "We will process " << count_process << "clusters";
+
+        for (int i_cluster = 0; i_cluster < m_clusters.size(); ++i_cluster) {
+            const auto &indices = m_clusters[i_cluster].indices;
+            // only process supervoxel over large clusters
+            if (indices.size() < cluster_size_th) continue;
+            SupervoxelClustering<PointXYZRGB> super(1.0, 21.0);
+            map<uint32_t, Supervoxel<PointXYZRGB>::Ptr> supervoxel_clusters;
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr local_pcd(new pcl::PointCloud<pcl::PointXYZRGB>());
+            for (const auto &idx : indices) {
+                local_pcd->points.emplace_back(curr_pcd->points[idx]);
+            } 
+            super.setInputCloud(local_pcd);
+            super.setColorImportance(0);
+            super.setNormalImportance(0);
+            super.setSpatialImportance(1);
+            super.extract(supervoxel_clusters);
+            if (supervoxel_clusters.empty()) continue;
+            // LOG(INFO) << "super voxel cluster size = " << supervoxel_clusters.size() << endl;
+            
+            // assign result via nearest neighbors
+            auto local_labeled_cloud = super.getLabeledVoxelCloud();
+            pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
+            kdtree.setInputCloud(local_labeled_cloud);
+            int K = 1;
+            std::vector<int> point_indices(K);
+            std::vector<float> distances(K);
+            for (const auto &idx : indices) {
+                const auto &orig_pt = curr_pcd->points[idx];
+                pcl::PointXYZL pt;
+                pt.x = orig_pt.x;
+                pt.y = orig_pt.y;
+                pt.z = orig_pt.z;
+                if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {    
+                    m_cluster_label[idx] = local_labeled_cloud->points[point_indices[0]].label + curr_valid_label;
+                }
+            }
+            curr_valid_label += supervoxel_clusters.size();
+        }
+    }
+    // TODO(ybbbbt): assign too small clusters to unlabeled
+    // TODO(ybbbbt): assign unlabeled to nearest label
+    {
+        // auto orig_labeled_pts = new pcl::PointCloud<pcl::PointXYZL>();
         // assign to m_target_pcd
+        int outlier_clusters = 0;
         m_target_pcd.reset(new pcl::PointCloud<pcl::PointXYZL>());
         m_target_pcd->points.reserve(curr_pcd->points.size());
         for (size_t i = 0; i < curr_pcd->points.size(); ++i) {
@@ -149,12 +204,24 @@ void MapManager::filter_and_clustering() {
 
     uint32_t label_idx = 0;
     // orig_label->compressed_label
-    std::map<uint32_t, uint32_t> label_map;
+    std::unordered_map<uint32_t, uint32_t> label_map;
     for (auto &p : m_labeled_pcd->points) {
         if (label_map.count(p.label) == 0) {
             label_map[p.label] = label_idx++;
         }
         p.label = label_map[p.label];
     }
+    {
+        // random labels
+        std::vector<int> random_labels(label_map.size());
+        int n(0);
+        std::generate(std::begin(random_labels), std::end(random_labels), [&n] { return n++; });
+        auto rng = std::default_random_engine {};
+        std::shuffle(std::begin(random_labels), std::end(random_labels), rng);
+        for (int i = 0; i < m_labeled_pcd->points.size(); ++i) {
+            m_labeled_pcd->points[i].label = random_labels[m_labeled_pcd->points[i].label];
+        }
+    }
+    LOG(INFO) << "finally, we got " << label_map.size() << " clusters";
     max_target_label = label_map.size();
 }
