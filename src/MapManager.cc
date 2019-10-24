@@ -783,6 +783,13 @@ void MapManager::filter_points_near_cameras(float radius) {
             std::copy(near_indices.begin(), near_indices.end(),std::inserter(outlier_indices_set, outlier_indices_set.end()));
         }
     }
+    // also remove HIGHLIGHT (ground) points
+    CHECK(m_render_label.size() == m_pcd->points.size());
+    for (int i = 0; i < m_render_label.size(); ++i) {
+        if (m_render_label[i] == HIGHLIGHT || m_render_label[i] == BACKGROUND) {
+            outlier_indices_set.insert(i);
+        }
+    }
     // https://stackoverflow.com/questions/44921987/removing-points-from-a-pclpointcloudpclpointxyzrgb
     pcl::ExtractIndices<pcl::PointXYZRGB> extract;
     pcl::PointIndices::Ptr outliers(new pcl::PointIndices());

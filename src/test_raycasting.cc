@@ -43,6 +43,9 @@ namespace fs = std::experimental::filesystem;
 void processing(shared_ptr<MapManager>& mm) {
     mm->filter_outliers(2, 10);
     mm->filter_landmarks_through_background();
+    mm->dye_through_render();
+    mm->update_view();
+    mm->show_point_cloud();
     mm->supervoxel_landmark_clustering(0.7f);
 
     mm->set_view_type(1);
@@ -50,7 +53,12 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->show_point_cloud();
 
     mm->filter_supervoxels_through_background();
-    mm->filter_points_near_cameras(2.0);
+    mm->filter_points_near_cameras(5.0);
+
+    mm->set_view_type(0);
+    mm->update_view();
+    mm->show_point_cloud();
+
     mm->update_view();
     mm->show_point_cloud();
 
@@ -62,6 +70,17 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->set_view_type(2);
     mm->update_view();
     mm->show_point_cloud();
+
+    mm->filter_supervoxels_through_background("labeled");
+    mm->set_view_type(2);
+    mm->update_view();
+    mm->show_point_cloud();
+
+    mm->filter_minor_segmentations(30, "labeled");
+    mm->set_view_type(2);
+    mm->update_view();
+    mm->show_point_cloud();
+
 }
 
 void test_raycasting_robotcar(int argc, char** argv) {
@@ -189,7 +208,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     
     /* scope: raycasting */ 
     {
-        mm->prepare_octree_for_target_pcd(0.5f);
+        mm->prepare_octree_for_target_pcd(1.f);
 
         Eigen::Vector3f o, d, u;
         PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
@@ -239,7 +258,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             // LOG(INFO) << "image fn: " << image_fn << endl;
             fprintf(stdout, "\rProgress: %d / %zu", idx, es.size());
             fflush(stdout);
-
+            // fillHoles(save_img);
             cv::imwrite(image_fn, save_img);
             // cv::imshow("show", save_img);
             // cv::waitKey(0);
