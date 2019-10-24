@@ -93,7 +93,7 @@ public:
 
     void prepare_octree_for_target_pcd(float resolution = 1.0f);
     // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
-    void raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE = true, int stride = 7, float scale = 1, const std::string &raycast_pcd_type = "target");
+    void raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE = true, int stride = 7, float scale = 1, const std::string &raycast_pcd_type = "target");
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_landmarks();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_background();

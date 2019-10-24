@@ -127,10 +127,9 @@ void test_raycasting_robotcar(int argc, char** argv) {
     mm->m_camera_extrinsics = es;
     mm->m_camera_types = camera_types;
     processing(mm);
-
+    vector<PointXYZRGB>    centers{static_cast<size_t>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
     /* scope: json file output */ 
     {
-        vector<PointXYZRGB>    centers{static_cast<size_t>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
         vector<int>         point_counter(static_cast<size_t>(mm->max_target_label), 0);
 
         LOG(INFO) << centers.size() << endl;
@@ -233,15 +232,15 @@ void test_raycasting_robotcar(int argc, char** argv) {
             const float de_stride = 5;
             switch (camera_type) {
             case 0:
-                mm->raycasting_pcd(e, left_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
+                mm->raycasting_pcd(e, left_intrsinsics, pcd, centers, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
             
             case 1:
-                mm->raycasting_pcd(e, rear_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
+                mm->raycasting_pcd(e, rear_intrsinsics, pcd, centers, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
             
             case 2:
-                mm->raycasting_pcd(e, right_intrsinsics, pcd, de_stride > 0, de_stride, 1.0, "labeled");
+                mm->raycasting_pcd(e, right_intrsinsics, pcd, centers, de_stride > 0, de_stride, 1.0, "labeled");
                 break;
 
             default:

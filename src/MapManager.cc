@@ -329,7 +329,7 @@ void MapManager::prepare_octree_for_target_pcd(float resolution) {
 }
 
 // extrinsics: world to camera
-void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type) {
+void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type) {
     // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
@@ -378,10 +378,17 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                 }
                 hit_count++;
                 pt.label = raycast_pcd->points[idx].label;
+                // depth[v * width + u] = euclidean_distance(
+                //     raycast_pcd->points[idx].x - origin[0],
+                //     raycast_pcd->points[idx].y - origin[1],
+                //     raycast_pcd->points[idx].z - origin[2]
+                // );
+                // depth to cluster center
+                auto cluster_center = centers[raycast_pcd->points[idx].label];
                 depth[v * width + u] = euclidean_distance(
-                    raycast_pcd->points[idx].x - origin[0],
-                    raycast_pcd->points[idx].y - origin[1],
-                    raycast_pcd->points[idx].z - origin[2]
+                    cluster_center.x - origin[0],
+                    cluster_center.y - origin[1],
+                    cluster_center.z - origin[2]
                 );
             } else {
                 pt.label = 0;

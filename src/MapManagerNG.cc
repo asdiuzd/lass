@@ -154,6 +154,7 @@ void MapManager::filter_and_clustering() {
             super.setNormalImportance(0);
             super.setSpatialImportance(1);
             super.extract(supervoxel_clusters);
+            // TODO(ybbbbt): supervoxel 0 -> invalid
             if (supervoxel_clusters.empty()) continue;
             // LOG(INFO) << "super voxel cluster size = " << supervoxel_clusters.size() << endl;
             
