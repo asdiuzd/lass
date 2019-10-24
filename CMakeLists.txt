@@ -54,3 +54,7 @@ list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 target_compile_options(test_pointcloud_processing PUBLIC
     $<$<CONFIG:RELEASE>:-O3>
 )
+
+target_compile_options(test_pointcloud_processing PUBLIC
+    $<$<CONFIG:DEBUG>:-Og -g -ggdb>
+)

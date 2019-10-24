@@ -46,7 +46,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->dye_through_render();
     mm->update_view();
     mm->show_point_cloud();
-    mm->supervoxel_landmark_clustering(0.7f);
+    mm->supervoxel_landmark_clustering();
 
     mm->set_view_type(1);
     mm->update_view();
@@ -76,7 +76,8 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->update_view();
     mm->show_point_cloud();
 
-    mm->filter_minor_segmentations(30, "labeled");
+    // label compression may not work properly for m_label_pcd
+    // mm-filter_minor_segmentations(30, "labeled");
     mm->set_view_type(2);
     mm->update_view();
     mm->show_point_cloud();
@@ -126,8 +127,8 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
     /* scope: json file output */ 
     {
-        vector<PointXYZRGB>    centers{static_cast<unsigned long>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
-        vector<int>         point_counter(static_cast<unsigned long>(mm->max_target_label), 0);
+        vector<PointXYZRGB>    centers{static_cast<size_t>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
+        vector<int>         point_counter(static_cast<size_t>(mm->max_target_label), 0);
 
         LOG(INFO) << centers.size() << endl;
         LOG(INFO) << point_counter.size() << endl;
@@ -135,6 +136,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
         LOG(INFO) << "process center and RGB" << endl;
         for (auto& pt: mm->m_target_pcd->points) {
             auto& label = pt.label;
+            CHECK(label < centers.size() && label >= 0);
             centers[label].x += pt.x;
             centers[label].y += pt.y;
             centers[label].z += pt.z;
@@ -160,9 +162,9 @@ void test_raycasting_robotcar(int argc, char** argv) {
         }
 
         ofstream o_label{argv[4]};
-        json j_es;
         o_label << std::setw(4) << j_label;
-
+        
+        json j_es;
         LOG(INFO) << "process extrinsics" << endl;
         for (int idx = 0; idx < es.size(); idx++) {
             Eigen::Matrix4f e = es[idx];
