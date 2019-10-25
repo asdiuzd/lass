@@ -212,9 +212,8 @@ void test_raycasting_robotcar(int argc, char** argv) {
     
     /* scope: raycasting */ 
     {
-        mm->prepare_octree_for_target_pcd(0.7f);
+        mm->prepare_octree_for_target_pcd(0.8f);
 
-        Eigen::Vector3f o, d, u;
         PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
         cv::Mat save_img(cv::Size(width, height), CV_8UC3);
         cv::Vec3b color;
@@ -229,7 +228,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             e(0, 1) *= -1; e(0, 2) *= -1;
             e(1, 0) *= -1; e(2, 0) *= -1;
 
-            const float de_stride = 5;
+            const float de_stride = 3;
             switch (camera_type) {
             case 0:
                 mm->raycasting_pcd(e, left_intrsinsics, pcd, centers, de_stride > 0, de_stride, 1.0, "labeled");
@@ -256,7 +255,21 @@ void test_raycasting_robotcar(int argc, char** argv) {
                     if (pt.label == 0) {
                         c[0] = c[1] = c[2] = 0;
                     } else {
+                        // TODO(ybbbbt): bug here, colormap not distinguish enough
                         GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                        {
+                            // debug scope
+                            // make sure each color map to only one label
+                            char color_str[256];
+                            sprintf(color_str, "%03d%03d%03d", c[0], c[1], c[2]);
+                            std::string color_s(color_str);
+                            static std::unordered_map<std::string, uint32_t> color_map;
+                            if (color_map.count(color_s) > 0) {
+                                CHECK(color_map[color_s] == pt.label);
+                            } else {
+                                color_map[color_s] = pt.label;
+                            }
+                        }
                     }
                 }
             }

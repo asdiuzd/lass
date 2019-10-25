@@ -355,7 +355,8 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
     } else if (raycast_pcd_type == "target") {
         raycast_pcd = m_target_pcd;
     }
-
+    // TODO(ybbbbt): in fact, we always use m_target_pcd for raycasting(due to prepare_octree_for_target_pcd), but currently m_labeled_pcd is the same as m_target_pcd 
+    CHECK(m_labeled_pcd == m_target_pcd);
     for (int u = 0; u < width; u++) {
         for (int v = 0; v < height; v++) {
             auto &d = directions[u][v];
