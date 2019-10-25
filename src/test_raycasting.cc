@@ -40,6 +40,12 @@ using namespace pcl::visualization;
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
+inline void label_to_rgb(uchar &r, uchar &g, uchar &b, uint32_t label) {
+    r = label / (256 * 256);
+    g = (label / 256) % 256;
+    b = label % 256;
+}
+
 void processing(shared_ptr<MapManager>& mm) {
     // mm->filter_outliers(2, 10);
     mm->filter_outliers(0.01, 0);
@@ -127,6 +133,8 @@ void test_raycasting_robotcar(int argc, char** argv) {
     mm->m_camera_extrinsics = es;
     mm->m_camera_types = camera_types;
     processing(mm);
+
+    bool use_training_colormap = false;
     vector<PointXYZRGB>    centers{static_cast<size_t>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
     /* scope: json file output */ 
     {
@@ -147,9 +155,15 @@ void test_raycasting_robotcar(int argc, char** argv) {
 
         centers[0].r = centers[0].g = centers[0].b = 0;
         LOG(INFO) << "center of label 0: " << centers[0] << endl;
-        json j_label;
-        j_label.push_back(
+        json j_xyz_rgb, j_rbg_label, j_centers;
+        j_xyz_rgb.push_back(
             {centers[0].x, centers[0].y, centers[0].z, centers[0].r, centers[0].g, centers[0].b}
+        );
+        j_rbg_label.push_back(
+            {centers[0].r, centers[0].g, centers[0].b, 0}
+        );
+        j_centers.push_back(
+            {centers[0].x, centers[0].y, centers[0].z}
         );
 
         for (int idx = 1; idx < mm->max_target_label; idx++) {
@@ -157,14 +171,29 @@ void test_raycasting_robotcar(int argc, char** argv) {
             center.x /= point_counter[idx];
             center.y /= point_counter[idx];
             center.z /= point_counter[idx];
-            GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
-            j_label.push_back(
+            if (use_training_colormap) {
+                label_to_rgb(center.r, center.g, center.b, idx);
+            } else {
+                GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
+            }
+            
+            j_xyz_rgb.push_back(
                 {center.x, center.y, center.z, center.r, center.g, center.b}
+            );
+            j_rbg_label.push_back(
+                {center.r, center.g, center.b, idx}
+            );
+            j_centers.push_back(
+                {center.x, center.y, center.z}
             );
         }
 
-        ofstream o_label{argv[4]};
-        o_label << std::setw(4) << j_label;
+        ofstream o_xyz_rgb{"xyz_rgb.json"};
+        o_xyz_rgb << std::setw(4) << j_xyz_rgb;
+        ofstream o_rgb_label{"rgb_label.json"};
+        o_rgb_label << std::setw(4) << j_rbg_label;
+        ofstream o_id2centers{"id2centers.json"};
+        o_id2centers << std::setw(4) << j_centers;
         
         json j_es;
         LOG(INFO) << "process extrinsics" << endl;
@@ -194,7 +223,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             auto& e = es[idx];
             auto& camera_type = camera_types[idx];
             auto& image_fn = image_fns[idx];
-            if (idx % 10 >= 8) {
+            if (idx % 5 >= 4) {
                 test_list.push_back(image_fn);
             } else {
                 train_list.push_back(image_fn);
@@ -256,8 +285,13 @@ void test_raycasting_robotcar(int argc, char** argv) {
                         c[0] = c[1] = c[2] = 0;
                     } else {
                         // TODO(ybbbbt): bug here, colormap not distinguish enough
-                        GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
-                        {
+                        if (use_training_colormap) {
+                            label_to_rgb(c[0], c[1], c[2], pt.label);
+                        } else {
+                            GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                        }
+                        
+                        if (use_training_colormap) {
                             // debug scope
                             // make sure each color map to only one label
                             char color_str[256];
