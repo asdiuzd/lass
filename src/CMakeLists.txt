@@ -16,5 +16,5 @@ target_link_libraries(test_tsdf ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LI
 add_executable(test_LODR test_LODR.cc utils.cc)
 target_link_libraries(test_LODR ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)
 
-add_executable(filter_robotcar_raycast filter_robotcar_raycast.cc)
-target_link_libraries(filter_robotcar_raycast ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)
+add_executable(batch_fillhole batch_fillhole.cc utils.cc)
+target_link_libraries(batch_fillhole ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)

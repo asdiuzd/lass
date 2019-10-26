@@ -53,7 +53,7 @@ void MapManager::filter_and_clustering() {
     }
     // filter points near cameras
     {
-        const float radius = 3.0;
+        const float radius = 1.5;
         LOG(INFO) << __func__ << endl;
         LOG(INFO) << "filter points near cameras";
         if (m_camera_extrinsics.empty()) {

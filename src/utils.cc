@@ -735,4 +735,36 @@ std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, d
     }
 }
 
+void filter_few_colors(cv::Mat &img, int few_color_threshold) {
+    // construct color count map
+    std::map<int, int> color_count_map;
+    for (int j = 0; j < img.rows; ++j) {
+        for (int i = 0; i < img.cols; ++i) {
+            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
+            if (color_count_map.count(color_key) == 0) {
+                color_count_map[color_key] = 1;
+            } else {
+                color_count_map[color_key]++;
+            }
+        }
+    }
+    // find few color color_key
+    std::set<int> few_color_keys;
+    for (const auto &p : color_count_map) {
+        if (p.second <= few_color_threshold) few_color_keys.insert(p.first);
+    }
+
+    // filter out few colors
+    for (int j = 0; j < img.rows; ++j) {
+        for (int i = 0; i < img.cols; ++i) {
+            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
+            if (few_color_keys.count(color_key) > 0) {
+                c[0] = c[1] = c[2] = 0;
+            }
+        }
+    }
+}
+
 }

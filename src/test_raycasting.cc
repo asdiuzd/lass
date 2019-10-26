@@ -134,7 +134,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     mm->m_camera_types = camera_types;
     processing(mm);
 
-    bool use_training_colormap = false;
+    bool use_training_colormap = true;
     vector<PointXYZRGB>    centers{static_cast<size_t>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
     /* scope: json file output */ 
     {
@@ -153,7 +153,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             point_counter[label]++;
         }
 
-        centers[0].r = centers[0].g = centers[0].b = 0;
+        centers[0].x = centers[0].y = centers[0].z = centers[0].r = centers[0].g = centers[0].b = 0;
         LOG(INFO) << "center of label 0: " << centers[0] << endl;
         json j_xyz_rgb, j_rbg_label, j_centers;
         j_xyz_rgb.push_back(
@@ -241,7 +241,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
     
     /* scope: raycasting */ 
     {
-        mm->prepare_octree_for_target_pcd(0.8f);
+        mm->prepare_octree_for_target_pcd(0.9f);
 
         PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
         cv::Mat save_img(cv::Size(width, height), CV_8UC3);
@@ -276,8 +276,8 @@ void test_raycasting_robotcar(int argc, char** argv) {
                 break;
             }
 
-            for (int i = 0; i < width; i++) {
-                for (int j = 0; j < height; j++) {
+            for (int j = 0; j < height; j++) {
+                for (int i = 0; i < width; i++) {
                     auto& pt = pcd->points[j * width + i];
                     auto& c = save_img.at<cv::Vec3b>(j, i);
 
@@ -310,6 +310,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             // LOG(INFO) << "image fn: " << image_fn << endl;
             fprintf(stdout, "\rProgress: %d / %zu", idx, es.size());
             fflush(stdout);
+            filter_few_colors(save_img);
             // fillHoles(save_img);
             cv::imwrite(image_fn, save_img);
             // cv::imshow("show", save_img);

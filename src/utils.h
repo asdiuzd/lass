@@ -88,6 +88,9 @@ void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double
 inline double normalize_value(double value, double min, double max) {
     return (value - min) / (max - min);
 }
+
+void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
+
 }
 
 #endif
