@@ -30,11 +30,19 @@ int main() {
     }
 
     // file holes
-    #pragma omp parallel for
+    #pragma omp parallel for num_threads(8)
     for (int i = 0; i < img_list.size(); ++i) {
         std::string name = img_list[i];
         cv::Mat img = cv::imread(name);
-        fillHoles(img);
+        fillHoles_fast(img);
+        // assign color for better visualization (because we don't need blue channel)
+        for (int x = 0; x < img.rows; ++x) {
+            for (int y = 0; y < img.cols; ++y) {
+                auto &c = img.at<cv::Vec3b>(x, y);
+                if (c[0] == 0 && c[1] == 0 && c[2] == 0) continue;
+                c[0] = 120;
+            }
+        }
         name = "fill_hole/" + name;
         cv::imwrite(name, img);
         static int count = 0;

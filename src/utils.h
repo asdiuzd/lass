@@ -81,6 +81,7 @@ void Dilate(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &dept
 void Erode(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale = 4);
 void depth_based_DE(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, const camera_intrinsics& intrinsics, int stride = 7, float scale = 4);
 void fillHoles(cv::Mat &img);
+void fillHoles_fast(cv::Mat &img);
 
 std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, double grid_resolution=5.0);
 

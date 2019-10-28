@@ -18,3 +18,6 @@ target_link_libraries(test_LODR ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LI
 
 add_executable(batch_fillhole batch_fillhole.cc utils.cc)
 target_link_libraries(batch_fillhole ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)
+
+add_executable(test_fillhole test_fillhole.cc)
+target_link_libraries(test_fillhole ${OpenCV_LIBS})

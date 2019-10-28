@@ -409,64 +409,62 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
     // }
 }
 
-void fillHoles(cv::Mat &img) {
-    int top = img.rows, bottom = 0;
-    int left = img.cols, right = 0;
-    vector<pair<int, int>> idx;
-    const double max_angle_thres = 90;
+void fillHoles_fast(cv::Mat &img) {
+    cv::Mat img_filled = img.clone();
+    const int min_conscultive_angle_thresh = 180;
+    const int distance_thresh = 25;
+    const int distance_thresh_2 = distance_thresh * distance_thresh;
     const int bin_num = 72;
+    const int bin_angle = 360 / bin_num;
+    assert(std::abs((360.0 / bin_num) - bin_angle) < 1.0e-5);
+
+    std::vector<int> bins(bin_num);
+
     for (int i = 0; i < img.rows; ++i) {
         for (int j = 0; j < img.cols; ++j) {
-            if (img.at<Vec3b>(i, j) != Vec3b(0, 0 ,0)) {
-                top = min(i, top);
-                bottom = max(i, bottom);
-                left = min(j, left);
-                right = max(j, right);
-                idx.emplace_back(make_pair(i, j));
-            }
-        }
-    }
-    if (idx.size() < 10) {
-        for (size_t i = 0; i < idx.size(); ++i) {
-            int u = idx[i].first, v = idx[i].second;
-            img.at<Vec3b>(u, v) = Vec3b(0, 0, 0);
-        }
-        return;
-    }
-    for (int i = top; i <= bottom; ++i) {
-        for (int j = left; j <= right; ++j) {
-            if (img.at<Vec3b>(i, j) == Vec3b(0, 0, 0)) {
-                vector<int> bins;
-                for (int i = 0; i < bin_num; ++i) {
-                    bins.emplace_back(0);
-                }
-                for (size_t k = 0; k < idx.size(); ++k) {
-                    int u = idx[k].first, v = idx[k].second;
-                    int y = u - i, x = v - j;
-                    double theta = (atan2(y, x) + M_PI) * 180 / M_PI;
-                    if (theta == 360) {
-                        theta = 0;
+            if (img.at<cv::Vec3b>(i, j) == cv::Vec3b(0, 0, 0)) {
+                const int i_lower = std::max(0, i - distance_thresh);
+                const int i_upper = std::min(img.rows - 1, i + distance_thresh);
+                const int j_lower = std::max(0, j - distance_thresh);
+                const int j_upper = std::min(img.cols - 1, j + distance_thresh);
+
+                bins.assign(bins.size(), std::numeric_limits<int>::max());
+                int min_distance_2 = std::numeric_limits<int>::max();
+                std::pair<int, int> closest_pos;
+                for (int ii = i_lower; ii < i_upper; ++ii) {
+                    for (int jj = j_lower; jj < j_upper; ++jj) {
+                        if (img.at<cv::Vec3b>(ii, jj) == cv::Vec3b(0, 0, 0)) continue;
+                        int distance_2 = (ii - i) * (ii - i) + (jj - j) * (jj - j);
+                        if (distance_2 > distance_thresh_2) continue;
+                        int y = ii - i, x = jj - j;
+                        double theta = (atan2(y, x) + M_PI) * 180 / M_PI;
+                        int bin_idx = theta / bin_angle;
+                        bin_idx = std::min(bin_idx, int(bins.size() - 1));
+                        bins[bin_idx] = std::min(bins[bin_idx], distance_2);
+                        if (distance_2 < min_distance_2) {
+                            min_distance_2 = distance_2;
+                            closest_pos = {ii, jj};
+                        }
                     }
-                    bins[(int)(theta / 5)]++;
                 }
                 int cnt = 0;
-                int max_angle = 0;
+                int max_cnt = 0;
                 for (int i = 0; i < bin_num * 2; ++i) {
-                    if (bins[i % bin_num] == 0) {
+                    if (bins[i % bin_num] != std::numeric_limits<int>::max()) {
                         ++cnt;
+                        max_cnt = std::max(cnt, max_cnt);
                     } else {
-                        if (cnt != 0) {
-                            max_angle = max(max_angle, cnt * (360 / bin_num));
-                        }
                         cnt = 0;
                     }
                 }
-                if (max_angle < max_angle_thres) {
-                    img.at<Vec3b>(i, j) = img.at<Vec3b>(idx[0].first, idx[0].second);
+                int max_angle = std::max(max_angle, max_cnt * bin_angle);
+                if (max_angle > min_conscultive_angle_thresh) {
+                    img_filled.at<cv::Vec3b>(i, j) = img.at<cv::Vec3b>(closest_pos.first, closest_pos.second);
                 }
             }
         }
     }
+    img = img_filled;
 }
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize) {
