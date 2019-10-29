@@ -86,6 +86,7 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_removed();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_unknown();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points_from_supervoxel();
 
     void set_view_target_pcd(bool flag) {
         m_show_target_pcd = flag;

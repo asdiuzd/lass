@@ -41,8 +41,14 @@ using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 void processing(shared_ptr<MapManager>& mm) {
+    mm->update_view();
+    mm->show_point_cloud();
     mm->filter_outliers(2, 15);
+    mm->update_view();
+    mm->show_point_cloud();
     mm->filter_landmarks_through_background();
+    mm->update_view();
+    mm->show_point_cloud();
     mm->supervoxel_landmark_clustering();
 
     mm->set_view_target_pcd(true);
