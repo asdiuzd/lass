@@ -21,3 +21,9 @@ target_link_libraries(batch_fillhole ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${Open
 
 add_executable(test_fillhole test_fillhole.cc)
 target_link_libraries(test_fillhole ${OpenCV_LIBS})
+
+add_executable(test_blend_color test_blend_color.cc utils.cc)
+target_link_libraries(test_blend_color ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)
+
+add_executable(test_split_robotcar_train_test test_split_robotcar_train_test.cc utils.cc)
+target_link_libraries(test_split_robotcar_train_test ${PCL_LIBRARIES} ${GFLAGS_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES} stdc++fs)

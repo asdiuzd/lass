@@ -411,7 +411,7 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
 
 void fillHoles_fast(cv::Mat &img) {
     cv::Mat img_filled = img.clone();
-    const int min_conscultive_angle_thresh = 180;
+    const int min_conscultive_angle_thresh = 280;
     const int distance_thresh = 25;
     const int distance_thresh_2 = distance_thresh * distance_thresh;
     const int bin_num = 72;
