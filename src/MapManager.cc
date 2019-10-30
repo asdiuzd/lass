@@ -379,18 +379,21 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                 }
                 hit_count++;
                 pt.label = raycast_pcd->points[idx].label;
-                // depth[v * width + u] = euclidean_distance(
-                //     raycast_pcd->points[idx].x - origin[0],
-                //     raycast_pcd->points[idx].y - origin[1],
-                //     raycast_pcd->points[idx].z - origin[2]
-                // );
-                // depth to cluster center
-                auto cluster_center = centers[raycast_pcd->points[idx].label];
-                depth[v * width + u] = euclidean_distance(
-                    cluster_center.x - origin[0],
-                    cluster_center.y - origin[1],
-                    cluster_center.z - origin[2]
-                );
+                if (centers.empty()) {
+                    depth[v * width + u] = euclidean_distance(
+                        raycast_pcd->points[idx].x - origin[0],
+                        raycast_pcd->points[idx].y - origin[1],
+                        raycast_pcd->points[idx].z - origin[2]
+                    );
+                } else {
+                    // depth to cluster center
+                    auto cluster_center = centers[raycast_pcd->points[idx].label];
+                    depth[v * width + u] = euclidean_distance(
+                        cluster_center.x - origin[0],
+                        cluster_center.y - origin[1],
+                        cluster_center.z - origin[2]
+                    );
+                }
             } else {
                 pt.label = 0;
             }

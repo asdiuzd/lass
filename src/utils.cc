@@ -765,4 +765,38 @@ void filter_few_colors(cv::Mat &img, int few_color_threshold) {
     }
 }
 
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs) {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr camera_points(new PointCloud<PointXYZRGB>());
+    for (size_t i = 0; i < Twcs.size(); ++i) {
+        Eigen::Matrix4f e = Twcs[i];
+        Eigen::Vector3f pwc = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qwc(e.block<3, 3>(0, 0));
+        const int visualize_length = 5;
+        for (int j = 0; j < visualize_length; ++j) {
+            // 0->x red, 1->y green, 2->z blue
+            // slam axis : x->right, y->down, z->forward
+            for (int i_axis = 0; i_axis < 3; ++i_axis) {
+                Eigen::Vector3f pt_axis;
+                pt_axis.setZero();
+                pt_axis(i_axis) = 1.0f;
+                pt_axis = qwc * pt_axis * (0.1 * j) + pwc;
+                Eigen::Vector3i color;
+                color.setZero();
+                color(i_axis) = 200;
+                pcl::PointXYZRGB pt;
+                pt.x = pt_axis.x();
+                pt.y = pt_axis.y();
+                pt.z = pt_axis.z();
+                pt.r = color.x();
+                pt.g = color.y();
+                pt.b = color.z();
+                camera_points->points.emplace_back(pt);
+            }
+        }
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(camera_points);
+    viewer->addPointCloud(camera_points, colors, "camera_points");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "camera_points");
+}
+
 }

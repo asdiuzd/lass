@@ -26,8 +26,12 @@
 #include "Camera.h"
 #include "MapManager.h"
 
+using Clock = std::chrono::high_resolution_clock;
+#define print_var(x) std::cout << #x << " " << x << std::endl;
 
 namespace lass {
+
+class camera_intrinsics;
 
 typedef struct mhd_structure {
     int ndims, dimsize, offsetx, offsety, offsetz;
@@ -91,6 +95,7 @@ inline double normalize_value(double value, double min, double max) {
 }
 
 void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs);
 
 }
 

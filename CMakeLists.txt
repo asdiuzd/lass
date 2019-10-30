@@ -51,10 +51,26 @@ list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 #     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
 # )
 
+add_library(lass SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManager.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManagerNG.cc
+)
+
 target_compile_options(test_pointcloud_processing PUBLIC
     $<$<CONFIG:RELEASE>:-O3>
 )
 
 target_compile_options(test_pointcloud_processing PUBLIC
     $<$<CONFIG:DEBUG>:-Og -g -ggdb>
+)
+
+
+target_link_libraries(lass
+    PUBLIC
+    ${PCL_LIBRARIES}
+    ${GFLAGS_LIBRARIES}
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    stdc++fs
 )
