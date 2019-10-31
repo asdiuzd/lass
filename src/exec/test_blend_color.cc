@@ -8,42 +8,43 @@
 
 using json = nlohmann::json;
 using namespace lass;
-
-int main() {
-    const std::string src_prefix = "/home/ybbbbt/Data/cambridge/ShopFacade/";
-    const std::string seg_prefix = "/home/ybbbbt/Developer/lass/bin/cambridge_raycast/";
-    int ret = system("rm -rf blend_color && mkdir -p blend_color/seq1 blend_color/seq2 blend_color/seq3");
+// args path_to_source_images path_to_raycast_images path_to_tran_test_list_json_base_dir src_img_format(jpg or png)
+int main(int argc, char **argv) {
+    const std::string src_prefix = argv[1];
+    const std::string seg_prefix = argv[2];
+    const std::string json_base_dir = argv[3];
+    const std::string src_img_format = argv[4];
     // read_json
     std::vector<std::string> img_list;
     json j;
     {
-        std::ifstream ifs("test_list.json");
+        std::ifstream ifs(json_base_dir + "/test_list.json");
         ifs >> j;
         for (auto& e : j) {
             img_list.push_back(e);
         }
     }
     {
-        std::ifstream ifs("train_list.json");
+        std::ifstream ifs(json_base_dir + "/train_list.json");
         ifs >> j;
         for (auto& e : j) {
             img_list.push_back(e);
         }
     }
 
-    // file holes
     #pragma omp parallel for num_threads(16)
     for (int i = 0; i < img_list.size(); ++i) {
         std::string name = img_list[i];
         // std::cout << name << std::endl;
-        cv::Mat img_src = cv::imread(src_prefix + "/" + name.substr(0, name.length() - 3) + "png");
+        cv::Mat img_src = cv::imread(src_prefix + "/" + name.substr(0, name.length() - 3) + src_img_format);
         cv::Mat img_cast = cv::imread(seg_prefix + "/" + name);
-        cv::resize(img_src, img_src, cv::Size(960, 540));
-        cv::resize(img_cast, img_cast, cv::Size(960, 540));
+        auto sz = cv::Size(img_src.cols / 2, img_src.rows / 2);
+        cv::resize(img_src, img_src, sz);
+        cv::resize(img_cast, img_cast, sz);
         cv::Mat img_blend;
         cv::addWeighted(img_src, 0.5, img_cast, 0.5, 0.0, img_blend);
         
-        name = "blend_color/" + name;
+        name = seg_prefix + "/../blend_color/" + name;
         name = name.substr(0, name.length() - 3) + "jpg";
         cv::imwrite(name, img_blend);
         static int count = 0;
