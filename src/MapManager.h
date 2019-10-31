@@ -100,6 +100,7 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_removed();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_unknown();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points_from_supervoxel();
 
     // 0: show m_pcd
     // 1: show m_target_pcd

@@ -33,13 +33,14 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void
     LOG(INFO) << "key board event: " << event.getKeySym() << endl;
     auto mm = static_cast<MapManager *>(mm_void);
     if (event.getKeySym() == "s" && event.keyDown()) {
-        // pm->view_with_threshold(pm->m_mu_threshold, pm->m_sigma_threshold, pm->m_single_point_threshold);
         mm->dye_through_semantics();
     } else if (event.getKeySym() == "p" && event.keyDown()) {
         // pm->view_single_point_threshold(pm->m_single_point_threshold);
         mm->export_to_dir("./tmp");
     } else if (event.getKeySym() == "n" && event.keyDown()) {
         stop_view = true;
+    } else if (event.getKeySym() == "z" && event.keyDown()) {
+        mm->m_viewer->saveScreenshot("screenshot.png");
     } else if (event.getKeySym() == "t" && event.keyDown()) {
         // LOG(INFO) << "Toggle use show flag" << endl;
         // maybe we need to use singleton
@@ -511,6 +512,23 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points(pcl::PointIndi
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(indices);
     extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points_from_supervoxel() {
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+
+    for (const auto& label_pt : m_target_pcd->points) {
+        PointXYZRGB pt;
+        pt.x = label_pt.x;
+        pt.y = label_pt.y;
+        pt.z = label_pt.z;
+
+        GroundColorMix(pt.b, pt.g, pt.r, normalize_value(label_pt.label, 0, max_target_label));
+
+        extracted_pcd->points.emplace_back(pt);
+    }
 
     return extracted_pcd;
 }
