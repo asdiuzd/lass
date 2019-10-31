@@ -2,6 +2,7 @@
 #include <string>
 #include <fstream>
 #include <cstdio>
+#include <chrono>
 #include <opencv2/opencv.hpp>
 
 using Clock = std::chrono::high_resolution_clock;
