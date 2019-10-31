@@ -33,16 +33,17 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void
     LOG(INFO) << "key board event: " << event.getKeySym() << endl;
     auto mm = static_cast<MapManager *>(mm_void);
     if (event.getKeySym() == "s" && event.keyDown()) {
-        // pm->view_with_threshold(pm->m_mu_threshold, pm->m_sigma_threshold, pm->m_single_point_threshold);
         mm->dye_through_semantics();
     } else if (event.getKeySym() == "p" && event.keyDown()) {
         // pm->view_single_point_threshold(pm->m_single_point_threshold);
         mm->export_to_dir("./tmp");
     } else if (event.getKeySym() == "n" && event.keyDown()) {
         stop_view = true;
+    } else if (event.getKeySym() == "z" && event.keyDown()) {
+        mm->m_viewer->saveScreenshot("screenshot.png");
     } else if (event.getKeySym() == "t" && event.keyDown()) {
-        LOG(INFO) << "Toggle use show flag" << endl;
-        mm->m_use_flag = !mm->m_use_flag;
+        mm->m_view_type = (++mm->m_view_type) % MapManager::VIEW_TYPE_COUNT;
+        LOG(INFO) << "Toggle use show flag to " << mm->m_view_type << endl;
     }
 }
 
@@ -55,15 +56,32 @@ void MapManager::initialize_viewer() {
 
 void MapManager::update_view() {
     m_viewer->removeAllPointClouds();
-    if (m_show_target_pcd) {
-        m_viewer->setBackgroundColor (0, 0, 0);
-        m_viewer->addPointCloud (m_target_pcd, "labeled voxels");
-        m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled voxels");
-        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled voxels");
-    } else {
-        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
-        m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "cloud");
-        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "cloud");
+    m_viewer->setBackgroundColor (0, 0, 0);
+    switch (m_view_type) {
+        case 0: {
+            pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
+            m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pcd");
+            break;
+        }
+        case 1: {
+            m_viewer->addPointCloud (m_target_pcd, "target_pcd");
+            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
+            break;
+        }
+        case 2: {
+            m_viewer->addPointCloud (m_labeled_pcd, "labeled_pcd");
+            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled_pcd");
+            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled_pcd");
+            break;
+        }
+        default: {
+
+        }
+    }
+    if (m_show_camera_extrinsics) {
+        update_camera_trajectory_to_viewer();
     }
 }
 
@@ -310,7 +328,7 @@ void MapManager::prepare_octree_for_target_pcd(float resolution) {
 }
 
 // extrinsics: world to camera
-void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE, int stride, float scale) {
+void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type) {
     // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
@@ -328,7 +346,16 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
     vector<double> depth(width * height, 999999);
 
     int hit_count = 0;
+    
+    pcl::PointCloud<pcl::PointXYZL>::Ptr raycast_pcd;
 
+    if (raycast_pcd_type == "labeled") {
+        raycast_pcd = m_labeled_pcd;
+    } else if (raycast_pcd_type == "target") {
+        raycast_pcd = m_target_pcd;
+    }
+    // TODO(ybbbbt): in fact, we always use m_target_pcd for raycasting(due to prepare_octree_for_target_pcd), but currently m_labeled_pcd is the same as m_target_pcd 
+    CHECK(m_labeled_pcd == m_target_pcd);
     for (int u = 0; u < width; u++) {
         for (int v = 0; v < height; v++) {
             auto &d = directions[u][v];
@@ -346,16 +373,26 @@ void MapManager::raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const 
             m_octree.getIntersectedVoxelIndices(origin, d, k_indices, 1);
             if (k_indices.size() > 0) {
                 auto &idx = k_indices[0];
-                if (idx >= m_target_pcd->points.size()) {
+                if (idx >= raycast_pcd->points.size()) {
                     LOG(INFO) << "Alert! " << idx << endl;
                 }
                 hit_count++;
-                pt.label = m_target_pcd->points[idx].label;
-                depth[v * width + u] = euclidean_distance(
-                    m_target_pcd->points[idx].x - origin[0],
-                    m_target_pcd->points[idx].y - origin[1],
-                    m_target_pcd->points[idx].z - origin[2]
-                );
+                pt.label = raycast_pcd->points[idx].label;
+                if (centers.empty()) {
+                    depth[v * width + u] = euclidean_distance(
+                        raycast_pcd->points[idx].x - origin[0],
+                        raycast_pcd->points[idx].y - origin[1],
+                        raycast_pcd->points[idx].z - origin[2]
+                    );
+                } else {
+                    // depth to cluster center
+                    auto cluster_center = centers[raycast_pcd->points[idx].label];
+                    depth[v * width + u] = euclidean_distance(
+                        cluster_center.x - origin[0],
+                        cluster_center.y - origin[1],
+                        cluster_center.z - origin[2]
+                    );
+                }
             } else {
                 pt.label = 0;
             }
@@ -473,6 +510,23 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points(pcl::PointIndi
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(indices);
     extractor.filter(*extracted_pcd);
+
+    return extracted_pcd;
+}
+
+pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points_from_supervoxel() {
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+
+    for (const auto& label_pt : m_target_pcd->points) {
+        PointXYZRGB pt;
+        pt.x = label_pt.x;
+        pt.y = label_pt.y;
+        pt.z = label_pt.z;
+
+        GroundColorMix(pt.b, pt.g, pt.r, normalize_value(label_pt.label, 0, max_target_label));
+
+        extracted_pcd->points.emplace_back(pt);
+    }
 
     return extracted_pcd;
 }
@@ -610,10 +664,17 @@ void MapManager::filter_landmarks_through_background(int knn, float ratio) {
    }
 }
 
-void MapManager::filter_supervoxels_through_background() {
+void MapManager::filter_supervoxels_through_background(const std::string &pcd_type) {
+    LOG(INFO) << __func__ << endl;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
+    if (pcd_type == "labeled") {
+        pcd_ptr = m_labeled_pcd;
+    } else if (pcd_type == "target") {
+        pcd_ptr = m_target_pcd;
+    }
     auto background_pcd = extract_background();
     PointXYZL min_pt, max_pt;
-    getMinMax3D(*m_target_pcd, min_pt, max_pt);
+    getMinMax3D(*pcd_ptr, min_pt, max_pt);
     float resolution = 1.0;
     int width = (max_pt.x - min_pt.x) / resolution + 1, height = (max_pt.y - min_pt.y) / resolution + 1;
     vector<vector<unsigned char>> map(width, vector<unsigned char>(height, 0));
@@ -640,8 +701,8 @@ void MapManager::filter_supervoxels_through_background() {
    }
 
    PointIndices::Ptr valid_indices{new PointIndices};
-   for (int idx = 0; idx < m_target_pcd->points.size(); idx++) {
-       auto& pt = m_target_pcd->points[idx];
+   for (int idx = 0; idx < pcd_ptr->points.size(); idx++) {
+       auto& pt = pcd_ptr->points[idx];
 
        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
        if (map[x][y] == 2) {
@@ -654,24 +715,35 @@ void MapManager::filter_supervoxels_through_background() {
     PointCloud<PointXYZL>::Ptr    valid_pts{new PointCloud<PointXYZL>()};
     ExtractIndices<PointXYZL>     extractor;
 
-    extractor.setInputCloud(m_target_pcd);
+    extractor.setInputCloud(pcd_ptr);
     extractor.setIndices(valid_indices);
     extractor.filter(*valid_pts);
-    m_target_pcd = valid_pts;
-
+    if (pcd_type == "labeled") {
+        m_labeled_pcd = valid_pts;
+    } else if (pcd_type == "target") {
+        m_target_pcd = valid_pts;
+    }
 }
 
-void MapManager::filter_minor_segmentations(int number_threshold) {
+void MapManager::filter_minor_segmentations(int number_threshold, const std::string &pcd_type) {
+    LOG(INFO) << __func__ << endl;
+    pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
+    if (pcd_type == "labeled") {
+        pcd_ptr = m_labeled_pcd;
+    } else if (pcd_type == "target") {
+        pcd_ptr = m_target_pcd;
+    }
+
     int max_label = std::max_element(
-                        m_target_pcd->points.begin(),
-                        m_target_pcd->points.end(),
+                        pcd_ptr->points.begin(),
+                        pcd_ptr->points.end(),
                         [&](const PointXYZL &p1, const PointXYZL &p2) {
                             return p1.label < p2.label;
                         })
                         ->label + 1;
 
     vector<int> label_counter(max_label, 0), label_mapping(max_label, 0);
-    for (auto& p: m_target_pcd->points) {
+    for (auto& p: pcd_ptr->points) {
         label_counter[p.label]++;
     }
 
@@ -694,9 +766,9 @@ void MapManager::filter_minor_segmentations(int number_threshold) {
     LOG(INFO) << "size of label 0 = " << label_counter[0] << endl;
 
     PointCloud<PointXYZL>::Ptr remained_pts{new PointCloud<PointXYZL>};
-    // remained_pts->points.reserve(m_target_pcd->points.size());
+    // remained_pts->points.reserve(pcd_ptr->points.size());
 
-    for (auto& p:m_target_pcd->points) {
+    for (auto& p:pcd_ptr->points) {
         auto& label = p.label;
         if (label_counter[label] > number_threshold) {
             label = label_mapping[label];
@@ -704,6 +776,117 @@ void MapManager::filter_minor_segmentations(int number_threshold) {
         }
     }
 
-    m_target_pcd = remained_pts;
+    if (pcd_type == "labeled") {
+        m_labeled_pcd = remained_pts;
+    } else if (pcd_type == "target") {
+        m_target_pcd = remained_pts;
+    }
 }
+
+void MapManager::filter_points_near_cameras(float radius) {
+    LOG(INFO) << __func__ << endl;
+    if (m_camera_extrinsics.empty()) {
+        LOG(ERROR) << "m_camera_extrinsics is empty, filter_points_near_cameras would do nothing!";
+        return;
+    }
+    pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
+    kdtree.setInputCloud(m_pcd);
+    std::set<int> outlier_indices_set;
+    for (Eigen::Matrix4f e : m_camera_extrinsics) {
+        // apply rotation fix to extrinsics
+        e(1, 3) *= -1; e(2, 3) *= -1;
+        e(0, 1) *= -1; e(0, 2) *= -1;
+        e(1, 0) *= -1; e(2, 0) *= -1;
+        Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
+        Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
+        std::vector<int> near_indices;
+        std::vector<float> distances;
+        pcl::PointXYZRGB pt;
+        pt.x = pwc.x();
+        pt.y = pwc.y();
+        pt.z = pwc.z();
+        if (kdtree.radiusSearch(pt, radius, near_indices, distances) > 0) {
+            std::copy(near_indices.begin(), near_indices.end(),std::inserter(outlier_indices_set, outlier_indices_set.end()));
+        }
+    }
+    // also remove HIGHLIGHT (ground) points
+    CHECK(m_render_label.size() == m_pcd->points.size());
+    for (int i = 0; i < m_render_label.size(); ++i) {
+        if (m_render_label[i] == HIGHLIGHT || m_render_label[i] == BACKGROUND) {
+            outlier_indices_set.insert(i);
+        }
+    }
+    // https://stackoverflow.com/questions/44921987/removing-points-from-a-pclpointcloudpclpointxyzrgb
+    pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+    pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    outliers->indices.insert(outliers->indices.end(), outlier_indices_set.begin(), outlier_indices_set.end());
+    extract.setInputCloud(m_pcd);
+    extract.setIndices(outliers);
+    extract.setNegative(true);
+    extract.filter(*m_pcd);
+    LOG(INFO) << "outlier_indices size " << outlier_indices_set.size();
+}
+
+void MapManager::update_camera_trajectory_to_viewer() {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cam_centers(new PointCloud<PointXYZRGB>());
+    assert(m_camera_types.size() == m_camera_extrinsics.size());
+    for (size_t i = 0; i < m_camera_extrinsics.size(); ++i) {
+        Eigen::Matrix4f e = m_camera_extrinsics[i];
+        int camera_type = m_camera_types[i];
+        // apply rotation fix to extrinsics
+        e(1, 3) *= -1; e(2, 3) *= -1;
+        e(0, 1) *= -1; e(0, 2) *= -1;
+        e(1, 0) *= -1; e(2, 0) *= -1;
+        Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
+        Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
+        pcl::PointXYZRGB pt;
+        pt.x = pwc.x();
+        pt.y = pwc.y();
+        pt.z = pwc.z();
+        pt.r = pt.g = pt.b = 200;
+        cam_centers->points.emplace_back(pt);
+        for (int j = 1; j < 5; ++j) {
+            Eigen::Vector3f pt_forward = qcw.conjugate() * Eigen::Vector3f(0, 0, 0.1 * j) + pwc;
+            Eigen::Vector3i color;
+            color.setZero();
+            assert(camera_type < 3 && camera_type >= 0);
+            color(camera_type) = 200;
+            pcl::PointXYZRGB pt;
+            pt.x = pt_forward.x();
+            pt.y = pt_forward.y();
+            pt.z = pt_forward.z();
+            pt.r = color.x();
+            pt.g = color.y();
+            pt.b = color.z();
+            cam_centers->points.emplace_back(pt);
+        }
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(cam_centers);
+    m_viewer->addPointCloud(cam_centers, colors, "cam_centers");
+    m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "cam_centers");
+}
+
+void MapManager::assign_supervoxel_label_to_filtered_pcd() {
+    LOG(INFO) << __func__ << endl;
+    m_labeled_pcd.reset(new pcl::PointCloud<PointXYZL>());
+    pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
+    kdtree.setInputCloud(m_target_pcd);
+    int K = 1;
+    std::vector<int> point_indices(K);
+    std::vector<float> distances(K);
+    for (int i = 0; i < m_pcd->points.size(); ++i) {
+        const auto &orig_pt = m_pcd->points[i];
+        pcl::PointXYZL pt;
+        pt.x = orig_pt.x;
+        pt.y = orig_pt.y;
+        pt.z = orig_pt.z;
+        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {    
+            pt.label = m_target_pcd->points[point_indices[0]].label;
+            m_labeled_pcd->points.emplace_back(pt);
+        }
+    }
+}
+
 }

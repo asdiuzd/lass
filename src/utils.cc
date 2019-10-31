@@ -264,7 +264,7 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const 
     const double depth_min = 0, depth_max = 99999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
 
-    cout << "erode: " << width << ", " << height << endl;
+    // cout << "erode: " << width << ", " << height << endl;
 
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
@@ -321,7 +321,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
     m_pcd->points.resize(width * height);
     vector<double> m_depth(width * height, depth_max);
 
-    cout << "dilate: " << width << ", " << height << endl;
+    // cout << "dilate: " << width << ", " << height << endl;
 
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < height; ++j) {
@@ -373,8 +373,8 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
     map<int, int> m_map;
     const int pixel_number = depth.size();
     const int threshold =  pixel_number * 0.0001;
-    LOG(INFO) << "threshold = " << threshold << endl;
-    LOG(INFO) << "pixel number = " << pixel_number << endl;
+    // LOG(INFO) << "threshold = " << threshold << endl;
+    // LOG(INFO) << "pixel number = " << pixel_number << endl;
 
     for (int i = 0; i < pixel_number; i++) {
         auto& label = pcd->points[i].label;
@@ -409,64 +409,62 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
     // }
 }
 
-void fillHoles(cv::Mat &img) {
-    int top = img.rows, bottom = 0;
-    int left = img.cols, right = 0;
-    vector<pair<int, int>> idx;
-    const double max_angle_thres = 90;
+void fillHoles_fast(cv::Mat &img) {
+    cv::Mat img_filled = img.clone();
+    const int min_conscultive_angle_thresh = 280;
+    const int distance_thresh = 25;
+    const int distance_thresh_2 = distance_thresh * distance_thresh;
     const int bin_num = 72;
+    const int bin_angle = 360 / bin_num;
+    assert(std::abs((360.0 / bin_num) - bin_angle) < 1.0e-5);
+
+    std::vector<int> bins(bin_num);
+
     for (int i = 0; i < img.rows; ++i) {
         for (int j = 0; j < img.cols; ++j) {
-            if (img.at<Vec3b>(i, j) != Vec3b(0, 0 ,0)) {
-                top = min(i, top);
-                bottom = max(i, bottom);
-                left = min(j, left);
-                right = max(j, right);
-                idx.emplace_back(make_pair(i, j));
-            }
-        }
-    }
-    if (idx.size() < 10) {
-        for (size_t i = 0; i < idx.size(); ++i) {
-            int u = idx[i].first, v = idx[i].second;
-            img.at<Vec3b>(u, v) = Vec3b(0, 0, 0);
-        }
-        return;
-    }
-    for (int i = top; i <= bottom; ++i) {
-        for (int j = left; j <= right; ++j) {
-            if (img.at<Vec3b>(i, j) == Vec3b(0, 0, 0)) {
-                vector<int> bins;
-                for (int i = 0; i < bin_num; ++i) {
-                    bins.emplace_back(0);
-                }
-                for (size_t k = 0; k < idx.size(); ++k) {
-                    int u = idx[k].first, v = idx[k].second;
-                    int y = u - i, x = v - j;
-                    double theta = (atan2(y, x) + M_PI) * 180 / M_PI;
-                    if (theta == 360) {
-                        theta = 0;
+            if (img.at<cv::Vec3b>(i, j) == cv::Vec3b(0, 0, 0)) {
+                const int i_lower = std::max(0, i - distance_thresh);
+                const int i_upper = std::min(img.rows - 1, i + distance_thresh);
+                const int j_lower = std::max(0, j - distance_thresh);
+                const int j_upper = std::min(img.cols - 1, j + distance_thresh);
+
+                bins.assign(bins.size(), std::numeric_limits<int>::max());
+                int min_distance_2 = std::numeric_limits<int>::max();
+                std::pair<int, int> closest_pos;
+                for (int ii = i_lower; ii < i_upper; ++ii) {
+                    for (int jj = j_lower; jj < j_upper; ++jj) {
+                        if (img.at<cv::Vec3b>(ii, jj) == cv::Vec3b(0, 0, 0)) continue;
+                        int distance_2 = (ii - i) * (ii - i) + (jj - j) * (jj - j);
+                        if (distance_2 > distance_thresh_2) continue;
+                        int y = ii - i, x = jj - j;
+                        double theta = (atan2(y, x) + M_PI) * 180 / M_PI;
+                        int bin_idx = theta / bin_angle;
+                        bin_idx = std::min(bin_idx, int(bins.size() - 1));
+                        bins[bin_idx] = std::min(bins[bin_idx], distance_2);
+                        if (distance_2 < min_distance_2) {
+                            min_distance_2 = distance_2;
+                            closest_pos = {ii, jj};
+                        }
                     }
-                    bins[(int)(theta / 5)]++;
                 }
                 int cnt = 0;
-                int max_angle = 0;
+                int max_cnt = 0;
                 for (int i = 0; i < bin_num * 2; ++i) {
-                    if (bins[i % bin_num] == 0) {
+                    if (bins[i % bin_num] != std::numeric_limits<int>::max()) {
                         ++cnt;
+                        max_cnt = std::max(cnt, max_cnt);
                     } else {
-                        if (cnt != 0) {
-                            max_angle = max(max_angle, cnt * (360 / bin_num));
-                        }
                         cnt = 0;
                     }
                 }
-                if (max_angle < max_angle_thres) {
-                    img.at<Vec3b>(i, j) = img.at<Vec3b>(idx[0].first, idx[0].second);
+                int max_angle = std::max(max_angle, max_cnt * bin_angle);
+                if (max_angle > min_conscultive_angle_thresh) {
+                    img_filled.at<cv::Vec3b>(i, j) = img.at<cv::Vec3b>(closest_pos.first, closest_pos.second);
                 }
             }
         }
     }
+    img = img_filled;
 }
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize) {
@@ -733,6 +731,72 @@ std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, d
 
         labels[idx] = static_cast<int>(pt.x / x_resolution) * y_division + static_cast<int>(pt.y / y_resolution);
     }
+}
+
+void filter_few_colors(cv::Mat &img, int few_color_threshold) {
+    // construct color count map
+    std::map<int, int> color_count_map;
+    for (int j = 0; j < img.rows; ++j) {
+        for (int i = 0; i < img.cols; ++i) {
+            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
+            if (color_count_map.count(color_key) == 0) {
+                color_count_map[color_key] = 1;
+            } else {
+                color_count_map[color_key]++;
+            }
+        }
+    }
+    // find few color color_key
+    std::set<int> few_color_keys;
+    for (const auto &p : color_count_map) {
+        if (p.second <= few_color_threshold) few_color_keys.insert(p.first);
+    }
+
+    // filter out few colors
+    for (int j = 0; j < img.rows; ++j) {
+        for (int i = 0; i < img.cols; ++i) {
+            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
+            if (few_color_keys.count(color_key) > 0) {
+                c[0] = c[1] = c[2] = 0;
+            }
+        }
+    }
+}
+
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs) {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr camera_points(new PointCloud<PointXYZRGB>());
+    for (size_t i = 0; i < Twcs.size(); ++i) {
+        Eigen::Matrix4f e = Twcs[i];
+        Eigen::Vector3f pwc = e.block<3, 1>(0, 3);
+        Eigen::Quaternionf qwc(e.block<3, 3>(0, 0));
+        const int visualize_length = 5;
+        for (int j = 0; j < visualize_length; ++j) {
+            // 0->x red, 1->y green, 2->z blue
+            // slam axis : x->right, y->down, z->forward
+            for (int i_axis = 0; i_axis < 3; ++i_axis) {
+                Eigen::Vector3f pt_axis;
+                pt_axis.setZero();
+                pt_axis(i_axis) = 1.0f;
+                pt_axis = qwc * pt_axis * (0.1 * j) + pwc;
+                Eigen::Vector3i color;
+                color.setZero();
+                color(i_axis) = 200;
+                pcl::PointXYZRGB pt;
+                pt.x = pt_axis.x();
+                pt.y = pt_axis.y();
+                pt.z = pt_axis.z();
+                pt.r = color.x();
+                pt.g = color.y();
+                pt.b = color.z();
+                camera_points->points.emplace_back(pt);
+            }
+        }
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(camera_points);
+    viewer->addPointCloud(camera_points, colors, "camera_points");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "camera_points");
 }
 
 }

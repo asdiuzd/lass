@@ -26,8 +26,12 @@
 #include "Camera.h"
 #include "MapManager.h"
 
+using Clock = std::chrono::high_resolution_clock;
+#define print_var(x) std::cout << #x << " " << x << std::endl;
 
 namespace lass {
+
+class camera_intrinsics;
 
 typedef struct mhd_structure {
     int ndims, dimsize, offsetx, offsety, offsetz;
@@ -81,6 +85,7 @@ void Dilate(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &dept
 void Erode(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale = 4);
 void depth_based_DE(pcl::PointCloud<pcl::PointXYZL>::Ptr &pcd, std::vector<double> &depth, const camera_intrinsics& intrinsics, int stride = 7, float scale = 4);
 void fillHoles(cv::Mat &img);
+void fillHoles_fast(cv::Mat &img);
 
 std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, double grid_resolution=5.0);
 
@@ -88,6 +93,10 @@ void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double
 inline double normalize_value(double value, double min, double max) {
     return (value - min) / (max - min);
 }
+
+void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs);
+
 }
 
 #endif

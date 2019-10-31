@@ -39,7 +39,7 @@ public:
             lj += yj[idx] * yj[idx];
         }
 
-        e[0] /= sqrt(li) * sqrt(lj);
+        e[0] /= ceres::sqrt(li) * ceres::sqrt(lj);
         e[0] -= StandardCosTheta;
 
         return true;
@@ -86,7 +86,7 @@ public:
         for(int idx = 1; idx < EMBEDDING_LENGTH; idx++) {
             dis += (yi[idx] - yj[idx]) * (yi[idx] - yj[idx]);
         }
-        e[0] = w_* (sqrt(dis) - d_);
+        e[0] = w_* (ceres::sqrt(dis) - d_);
 
         return true;
     }

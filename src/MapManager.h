@@ -6,7 +6,6 @@
 #include "utils.h"
 #include "json.h"
 
-extern bool stop_view;
 namespace lass {
 typedef enum LandmarkType {
     UNKNOWN,
@@ -29,9 +28,11 @@ private:
     static const std::string parameters_name;
 
     void initialize_viewer();
+    void update_camera_trajectory_to_viewer();
 public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr  m_pcd;
-    pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;                                   // point cloud
+    pcl::PointCloud<pcl::PointXYZL>::Ptr m_target_pcd;   // supervoxel point cloud
+    pcl::PointCloud<pcl::PointXYZL>::Ptr m_labeled_pcd;  // from m_pcd to supervoxel label
     std::vector<bool>                       m_show_flag;
     std::vector<int>                        m_semantic_label, m_keypoints_label, m_render_label;
     std::vector<LandmarkType>               m_landmark_label;
@@ -40,8 +41,11 @@ public:
     pcl::PointIndices::Ptr                  m_index_of_landmark, m_index_of_background, m_index_of_removed, m_index_of_unknown;
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZL> m_octree;
 
-    bool m_use_flag = false;
-    bool m_show_target_pcd = false;
+    // 0: show m_pcd
+    // 1: show m_target_pcd
+    // 2: show m_labeled_pcd
+    int m_view_type = 0;
+    bool m_show_camera_extrinsics = false;  // visualize camera trajectory/extrinsics
     pcl::visualization::PCLVisualizer::Ptr m_viewer;                                // viewer
     int max_target_label;
     
@@ -50,6 +54,7 @@ public:
     // std::vector<pcl::PointIndices> m_clusters;
 
     std::vector<Eigen::Matrix4f> m_camera_extrinsics;
+    std::vector<int> m_camera_types;
 
     MapManager();
     MapManager(const std::string& dir); //< load from serialized directory
@@ -57,10 +62,15 @@ public:
     }
 
     void filter_outliers(float radius=2, int k=5);
+    void filter_outliers_via_statistics(float stddev = 2, float mean_k = 5);
     void filter_landmarks_through_background(int knn=20, float ratio=0.5);
-    void filter_supervoxels_through_background();
+    // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
+    void filter_supervoxels_through_background(const std::string &pcd_type = "target");
     void filter_useless_semantics_from_json(const std::string& fn);
-    void filter_minor_segmentations(int number_threshold=20);
+    // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
+    void filter_minor_segmentations(int number_threshold=20, const std::string &pcd_type = "target");
+    void filter_points_near_cameras(float radius);
+    void filter_and_clustering();
 
     void load_nvm_pcl(const std::string& fn);
     void load_pcd_pcl(const std::string& fn);
@@ -77,18 +87,28 @@ public:
     void grid_landmark_clustering();
     void euclidean_landmark_clustering();
     void supervoxel_landmark_clustering(float voxel_resolution = 1.0, float seed_resolution = 21.0, float spatial_importance = 1, float color_importance = 0, float normal_importance = 0);
+    // @brief assgin supervoxel label to m_pcd via nearest neighbors
+    void assign_supervoxel_label_to_filtered_pcd();
 
     void prepare_octree_for_target_pcd(float resolution = 1.0f);
-    void raycasting_target_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, bool depthDE = true, int stride = 7, float scale = 4);
+    // @param raycast_pcd_type "labeled"->m_labeled_pcd   "target"->m_target_pcd
+    void raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE = true, int stride = 7, float scale = 1, const std::string &raycast_pcd_type = "target");
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_landmarks();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_background();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_removed();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_unknown();
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points_from_supervoxel();
 
-    void set_view_target_pcd(bool flag) {
-        m_show_target_pcd = flag;
+    enum ViewType {
+        ORIG_PCD = 0,  // show m_pcd
+        TARGET_PCD,  // show m_target_pcd
+        LABELED_PCD,  // m_labeled_pcd
+        VIEW_TYPE_COUNT
+    };
+    void set_view_type(ViewType type) {
+        m_view_type = type;
     }
 
     void dye_through_semantics();

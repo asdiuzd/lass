@@ -17,6 +17,13 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    message(STATUS "Found CCache")
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
+endif(CCACHE_FOUND)
+
 include_directories(SYSTEM 
     ${PCL_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
@@ -24,26 +31,34 @@ include_directories(SYSTEM
 
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
-add_subdirectory(${PROJECT_SOURCE_DIR}/src)
+add_subdirectory(${PROJECT_SOURCE_DIR}/src/exec)
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
-# add_executable(cloud_viewer main.cc NVMProcessor.cc util.cc PlanarMap.cc)
-# add_executable(test_extrinsics test_extrinsics.cc NVMProcessor.cc util.cc PlanarMap.cc)
-# add_executable(test_raycasting test_raycasting.cc NVMProcessor.cc util.cc PlanarMap.cc)
-# add_executable(test_build_meshes test_build_meshes.cc NVMProcessor.cc util.cc PlanarMap.cc)
-# add_executable(test_pointcloud_processing test_pointcloud_processing.cc ${SOURCE_FILES})
+add_library(lass SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManager.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManagerNG.cc
+)
 
-# target_link_libraries(cloud_viewer ${PCL_LIBRARIES})
-# target_link_libraries(test_extrinsics ${PCL_LIBRARIES})
-# target_link_libraries(test_raycasting ${PCL_LIBRARIES})
-# target_link_libraries(test_build_meshes ${PCL_LIBRARIES})
-# target_link_libraries(test_pointcloud_processing ${PCL_LIBRARIES})
-
-# target_include_directories(test_pointcloud_processing
-#     SYSTEM PUBLIC
-#     ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty
-# )
-
-target_compile_options(test_pointcloud_processing PUBLIC
+target_compile_options(lass PUBLIC
     $<$<CONFIG:RELEASE>:-O3>
+)
+
+target_compile_options(lass PUBLIC
+    $<$<CONFIG:DEBUG>:-Og -g -ggdb>
+)
+
+target_include_directories(lass
+    PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+
+target_link_libraries(lass
+    PUBLIC
+    ${PCL_LIBRARIES}
+    ${GFLAGS_LIBRARIES}
+    ${OpenCV_LIBS}
+    ${CERES_LIBRARIES}
+    stdc++fs
 )
