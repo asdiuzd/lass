@@ -213,7 +213,7 @@ void test_raycasting_robotcar(int argc, char** argv) {
             }
         }
 
-        ofstream o_es{argv[5]};
+        ofstream o_es{"out_extrinsics.json"};
         o_es << std::setw(4) << j_es;
 
 
