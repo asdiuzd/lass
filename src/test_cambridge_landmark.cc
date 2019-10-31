@@ -18,9 +18,12 @@
 
 using namespace pcl;
 using namespace lass;
+using json = nlohmann::json;
 
 namespace {
 bool g_stop_view = false;
+
+const std::string folder_prefix = "cambridge_raycast/";
 
 struct PoseData {
     std::string filename;
@@ -126,22 +129,83 @@ void visualize_label_points_from_rgb(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
     visualize_labeled_points(labeled_pcd);
 }
 
-int main(int argc, char **argv) {
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::io::loadPLYFile(argv[1], *curr_pcd);
-    auto poses_twc = load_cambridge_pose_txt(argv[2]);
-    std::vector<Eigen::Matrix4f> Twcs;
-    for (const auto &p : poses_twc) {
-        Eigen::Matrix4f Twc;
-        Twc.setIdentity();
-        Twc.block<3, 3>(0, 0) = p.q.matrix();
-        Twc.block<3, 1>(0, 3) = p.p;
-        Twcs.push_back(Twc);
+// remove too small clusters, compress labels, compute and return cluster centers
+std::vector<pcl::PointXYZRGB> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr pcd, float small_cluster_thresh = 1.5) {
+    // find too small clusters
+    using min_max_pair = std::pair<Eigen::Vector3f, Eigen::Vector3f>;
+    // label->min_max_pair
+    std::unordered_map<uint32_t, min_max_pair> label_size;
+    for (auto &p : pcd->points) {
+        if (label_size.count(p.label) == 0) {
+            min_max_pair minmax;
+            minmax.first = {p.x, p.y, p.z};
+            minmax.second = {p.x, p.y, p.z};
+            label_size[p.label] = minmax;
+        } else {
+            auto &minmax = label_size[p.label];
+            minmax.first = {
+                std::min(minmax.first.x(), p.x),
+                std::min(minmax.first.y(), p.y),
+                std::min(minmax.first.z(), p.z)};
+            minmax.second = {
+                std::max(minmax.second.x(), p.x),
+                std::max(minmax.second.y(), p.y),
+                std::max(minmax.second.z(), p.z)};
+        }
     }
-    g_Twcs = Twcs;
+    std::set<uint32_t> small_cluster_labels;
+    for (const auto &p : label_size) {
+        float cluster_size = (p.second.first - p.second.second).norm();
+        if (cluster_size < small_cluster_thresh) small_cluster_labels.insert(p.first);
+    }
+    LOG(INFO) << "Find small clusters " << small_cluster_labels.size();
+    // compress label and mark small clusters to 0
+    // zero remains for invalid labels
+    // remove point with label == 0
+    pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    uint32_t label_idx = 1;
+    std::unordered_map<uint32_t, uint32_t> label_map;
+    for (int i = 0; i < pcd->points.size(); ++i) {
+        auto &p = pcd->points[i];
+        if (p.label == 0) {
+            outliers->indices.push_back(i);
+            continue;
+        }
+        if (small_cluster_labels.count(p.label) > 0) {
+            p.label = 0;
+            outliers->indices.push_back(i);
+            continue;
+        }
+        if (label_map.count(p.label) == 0) {
+            label_map[p.label] = label_idx++;
+        }
+        p.label = label_map[p.label];
+    }
+    pcl::ExtractIndices<pcl::PointXYZL> extract;
+    extract.setInputCloud(pcd);
+    extract.setIndices(outliers);
+    extract.setNegative(true);
+    extract.filter(*pcd);
+    // compute centers
+    std::vector<pcl::PointXYZRGB> centers(label_idx, pcl::PointXYZRGB(0, 0, 0));
+    centers[0].x = centers[0].y = centers[0].z = 0;
+    std::vector<int> centers_counter(centers.size(), 0);
+    for (const auto &p : pcd->points) {
+        centers[p.label].x += p.x;
+        centers[p.label].y += p.y;
+        centers[p.label].z += p.z;
+        centers_counter[p.label]++;
+    }
+    for (int i = 0; i < centers.size(); ++i) {
+        centers[i].x /= centers_counter[i];
+        centers[i].y /= centers_counter[i];
+        centers[i].z /= centers_counter[i];
+    }
+    return centers;
+}
 
-    visualize_rgb_points(curr_pcd);
-
+void point_process(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<pcl::PointXYZRGB> &centers) {
+    auto &curr_pcd = input_pcd;
     // Statistical filtering outliers
     {
         const float meanK = 6.0;
@@ -171,11 +235,11 @@ int main(int argc, char **argv) {
     curr_pcd_labeled->points.reserve(curr_pcd->points.size());
     // supervoxel clustering
     {
-        SupervoxelClustering<PointXYZRGB> super(0.3, 3.0);
+        SupervoxelClustering<PointXYZRGB> super(0.1, 3.0);
         std::map<uint32_t, Supervoxel<PointXYZRGB>::Ptr> supervoxel_clusters;
         super.setInputCloud(curr_pcd);
-        super.setColorImportance(1);
-        super.setNormalImportance(1);
+        super.setColorImportance(0);
+        super.setNormalImportance(0);
         super.setSpatialImportance(1);
         super.extract(supervoxel_clusters);
 
@@ -185,7 +249,11 @@ int main(int argc, char **argv) {
 
         visualize_labeled_points(labeled_voxel_cloud);
 
-        // assign result via nearest neighbors
+        centers = reform_labeled_pcd(labeled_voxel_cloud);
+        LOG(INFO) << "final cluster size: " << centers.size();
+        // visualize_labeled_points(labeled_voxel_cloud);
+
+#if 0 // assign result via nearest neighbors
         pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
         kdtree.setInputCloud(labeled_voxel_cloud);
         int K = 1;
@@ -202,68 +270,160 @@ int main(int argc, char **argv) {
                 curr_pcd_labeled->points.emplace_back(pt);
             }
         }
+#else
+        curr_pcd_labeled = labeled_voxel_cloud;
+#endif
     }
-    // TODO(ybbbbt): compress labels, remove too small centers
-    visualize_labeled_points(curr_pcd_labeled);
-    std::vector<pcl::PointXYZRGB> centers;
+    output_labeled_pcd = curr_pcd_labeled;
+}
 
-    // raycast
-    {
-        camera_intrinsics K;
-        K.fx = 375;
-        K.fy = 375;
-        K.cx = 240;
-        K.cy = 135;
-        K.width = 480;
-        K.height = 270;
+void dump_parameters(const std::vector<pcl::PointXYZRGB> &cluster_centers,
+                     const std::vector<PoseData> &train_poses_twc,
+                     const std::vector<PoseData> &test_poses_twc,
+                     const std::vector<PoseData> &all_poses_twc) {
+    const auto &centers = cluster_centers;
+    json j_centers;
+    j_centers.push_back(
+        {centers[0].x, centers[0].y, centers[0].z});
 
-        PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
-        cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
-        cv::Vec3b color;
+    for (int idx = 1; idx < centers.size(); idx++) {
+        auto center = centers[idx];
+        GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, centers.size()));
+        j_centers.push_back(
+            {center.x, center.y, center.z});
+    }
+    ofstream o_id2centers{"id2centers.json"};
+    o_id2centers << std::setw(4) << j_centers;
 
-        auto mm = std::make_unique<MapManager>();
-        mm->m_target_pcd = curr_pcd_labeled;
-        mm->m_labeled_pcd = curr_pcd_labeled;
-        mm->prepare_octree_for_target_pcd(0.3);
-        for (int i = 0; i < poses_twc.size(); ++i) {
-            Eigen::Matrix4f Tcw;
-            Tcw.setIdentity();
-            const auto &p = poses_twc[i];
-            Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
-            Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
-            mm->raycasting_pcd(Tcw, K, pcd, centers, true, 3, 1.0, "labeled");
-            // draw to cv::Mat
-            for (int j = 0; j < K.height; j++) {
-                for (int i = 0; i < K.width; i++) {
-                    auto &pt = pcd->points[j * K.width + i];
-                    auto &c = save_img.at<cv::Vec3b>(j, i);
-                    if (pt.label == 0) {
-                        c[0] = c[1] = c[2] = 0;
-                    } else {
-                        // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
-                        size_t h = pt.label * 6364136223846793005u + 1442695040888963407;
-                        c = cv::Vec3b{uchar(h & 0xFF), uchar((h >> 4) & 0xFF), uchar((h >> 8) & 0xFF)};
-                        if (1) {
-                            // debug scope
-                            // make sure each color map to only one label
-                            char color_str[256];
-                            sprintf(color_str, "%03d%03d%03d", c[0], c[1], c[2]);
-                            std::string color_s(color_str);
-                            static std::unordered_map<std::string, uint32_t> color_map;
-                            if (color_map.count(color_s) > 0) {
-                                CHECK(color_map[color_s] == pt.label);
-                            } else {
-                                color_map[color_s] = pt.label;
-                            }
+    json j_es;
+    for (int idx = 0; idx < all_poses_twc.size(); idx++) {
+        const auto &p = all_poses_twc[idx];
+        Eigen::Matrix4f Tcw;
+        Tcw.setIdentity();
+        Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
+        Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 4; c++) {
+                j_es[p.filename].push_back(Tcw(r, c));
+            }
+        }
+    }
+
+    ofstream o_es("out_extrinsics.json");
+    o_es << std::setw(4) << j_es;
+
+    // train test split
+    std::vector<std::string> train_list, test_list;
+    for (const auto &p : train_poses_twc) {
+        train_list.push_back(p.filename);
+    }
+    for (const auto &p : test_poses_twc) {
+        test_list.push_back(p.filename);
+    }
+    ofstream o_train_list{"train_list.json"};
+    json j_train_list = train_list;
+    o_train_list << std::setw(4) << j_train_list;
+    ofstream o_test_list{"test_list.json"};
+    json j_test_list = test_list;
+    o_test_list << std::setw(4) << j_test_list;
+
+    LOG(INFO) << "finished output json" << endl;
+}
+
+void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::vector<pcl::PointXYZRGB> &cluster_centers) {
+    // create folders
+    for (int i = 1; i < 25; ++i) {
+        std::string fname = folder_prefix + "seq" + std::to_string(i);
+        int ret = system(("mkdir -p " + fname).c_str());
+    }
+    camera_intrinsics K;
+    float focal = 1673.274048;
+    focal /= 4;
+    K.fx = focal;
+    K.fy = focal;
+    K.cx = 240;
+    K.cy = 135;
+    K.width = 480;
+    K.height = 270;
+
+    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
+    cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
+    cv::Vec3b color;
+
+    auto mm = std::make_unique<MapManager>();
+    mm->m_target_pcd = labeled_pcd;
+    mm->m_labeled_pcd = labeled_pcd;
+    mm->prepare_octree_for_target_pcd(0.3);
+    for (int i = 0; i < poses_twc.size(); ++i) {
+        Eigen::Matrix4f Tcw;
+        Tcw.setIdentity();
+        const auto &p = poses_twc[i];
+        Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
+        Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
+        mm->raycasting_pcd(Tcw, K, pcd, cluster_centers, true, 3, 1.0, "labeled");
+        // draw to cv::Mat
+        for (int j = 0; j < K.height; j++) {
+            for (int i = 0; i < K.width; i++) {
+                auto &pt = pcd->points[j * K.width + i];
+                auto &c = save_img.at<cv::Vec3b>(j, i);
+                if (pt.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                    // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                    // TODO(ybbbbt): colormap
+                    size_t h = pt.label * 6364136223846793005u + 1442695040888963407;
+                    c = cv::Vec3b{uchar(h & 0xFF), uchar((h >> 4) & 0xFF), uchar((h >> 8) & 0xFF)};
+                    if (1) {
+                        // debug scope
+                        // make sure each color map to only one label
+                        char color_str[256];
+                        sprintf(color_str, "%03d%03d%03d", c[0], c[1], c[2]);
+                        std::string color_s(color_str);
+                        static std::unordered_map<std::string, uint32_t> color_map;
+                        if (color_map.count(color_s) > 0) {
+                            CHECK(color_map[color_s] == pt.label);
+                        } else {
+                            color_map[color_s] = pt.label;
                         }
                     }
                 }
             }
-            cv::imshow("raycast", save_img);
-            cv::waitKey(0);
-
         }
+        // cv::imshow("raycast", save_img);
+        cv::imwrite(folder_prefix + p.filename, save_img);
+        // cv::waitKey(0);
+        fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
+        fflush(stdout);
     }
+}
+
+int main(int argc, char **argv) {
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::io::loadPLYFile(argv[1], *curr_pcd);
+    auto poses_twc_train = load_cambridge_pose_txt(std::string(argv[2]) + "/dataset_train.txt");
+    auto poses_twc_test = load_cambridge_pose_txt(std::string(argv[2]) + "/dataset_test.txt");
+    std::vector<PoseData> poses_twc_all = poses_twc_train;
+    poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
+    std::vector<Eigen::Matrix4f> Twcs;
+    for (const auto &p : poses_twc_all) {
+        Eigen::Matrix4f Twc;
+        Twc.setIdentity();
+        Twc.block<3, 3>(0, 0) = p.q.matrix();
+        Twc.block<3, 1>(0, 3) = p.p;
+        Twcs.push_back(Twc);
+    }
+    g_Twcs = Twcs;
+
+    visualize_rgb_points(curr_pcd);
+
+    pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
+    std::vector<pcl::PointXYZRGB> cluster_centers;
+    point_process(curr_pcd, labeled_pcd, cluster_centers);
+
+    visualize_labeled_points(labeled_pcd);
+    dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
+    raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
+    LOG(INFO) << "Finish All";
 
     return 0;
 }
