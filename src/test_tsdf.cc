@@ -49,6 +49,19 @@ void generate_centers(json& j, shared_ptr<MapManager>& mm) {
         center.y /= point_counter[idx];
         center.z /= point_counter[idx];
         GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
+        {
+            // debug section
+            // make sure each color only map to one label
+            char color_str[256];
+            sprintf(color_str, "%03d%03d%03d", center.r, center.g, center.b);
+            std::string color_s(color_str);
+            static std::unordered_map<std::string, uint32_t> color_map;
+            if (color_map.count(color_s) > 0) {
+                CHECK(color_map[color_s] == idx);
+            } else {
+                color_map[color_s] = idx;
+            }
+        }
         j.push_back(
             {center.x, center.y, center.z, center.r, center.g, center.b}
         );
@@ -218,8 +231,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
         // cv::imwrite(image_fn, save_img);
         cv::imshow("show", save_img);
-        cv::imwrite("show.png", save_img);
-        cv::waitKey(0);
+        // cv::imwrite("show.png", save_img);
+        cv::imwrite(image_fn, save_img);
+        // cv::waitKey(0);
     }
 }
 
