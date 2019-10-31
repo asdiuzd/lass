@@ -6,7 +6,6 @@
 #include "utils.h"
 #include "json.h"
 
-extern bool stop_view;
 namespace lass {
 typedef enum LandmarkType {
     UNKNOWN,
@@ -102,10 +101,13 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points(pcl::PointIndices::Ptr indices);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr extract_points_from_supervoxel();
 
-    // 0: show m_pcd
-    // 1: show m_target_pcd
-    // 2: show m_labeled_pcd
-    void set_view_type(int type) {
+    enum ViewType {
+        ORIG_PCD = 0,  // show m_pcd
+        TARGET_PCD,  // show m_target_pcd
+        LABELED_PCD,  // m_labeled_pcd
+        VIEW_TYPE_COUNT
+    };
+    void set_view_type(ViewType type) {
         m_view_type = type;
     }
 

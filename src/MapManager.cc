@@ -42,10 +42,8 @@ void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void
     } else if (event.getKeySym() == "z" && event.keyDown()) {
         mm->m_viewer->saveScreenshot("screenshot.png");
     } else if (event.getKeySym() == "t" && event.keyDown()) {
-        // LOG(INFO) << "Toggle use show flag" << endl;
-        // maybe we need to use singleton
-        // m_view_type = (++m_view_type) % 3;
-        
+        mm->m_view_type = (++mm->m_view_type) % MapManager::VIEW_TYPE_COUNT;
+        LOG(INFO) << "Toggle use show flag to " << mm->m_view_type << endl;
     }
 }
 

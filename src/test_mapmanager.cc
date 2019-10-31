@@ -66,7 +66,7 @@ void test_clustering(int argc, char** argv) {
     mm->filter_outliers(2, 15);
     // mm->euclidean_landmark_clustering();
     mm->supervoxel_landmark_clustering();
-    mm->set_view_type(1);
+    mm->set_view_type(MapManager::TARGET_PCD);
     mm->update_view();
     mm->show_point_cloud();
 
