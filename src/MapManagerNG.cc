@@ -158,8 +158,22 @@ void MapManager::filter_and_clustering() {
             if (supervoxel_clusters.empty()) continue;
             // LOG(INFO) << "super voxel cluster size = " << supervoxel_clusters.size() << endl;
             
-            // assign result via nearest neighbors
             auto local_labeled_cloud = super.getLabeledVoxelCloud();
+
+            // remove point with label == 0
+            pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+            for (int i = 0; i < local_labeled_cloud->points.size(); ++i) {
+                if (local_labeled_cloud->points[i].label == 0) {
+                    outliers->indices.push_back(i);
+                }
+            }
+            pcl::ExtractIndices<pcl::PointXYZL> extract;
+            extract.setInputCloud(local_labeled_cloud);
+            extract.setIndices(outliers);
+            extract.setNegative(true);
+            extract.filter(*local_labeled_cloud);
+
+            // assign result via nearest neighbors
             pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
             kdtree.setInputCloud(local_labeled_cloud);
             int K = 1;
