@@ -57,14 +57,14 @@ void processing(shared_ptr<MapManager>& mm) {
     // mm->supervoxel_landmark_clustering();
     // mm->euclidean_landmark_clustering();
     mm->filter_and_clustering();
-    mm->set_view_type(1);
+    mm->set_view_type(MapManager::TARGET_PCD);
     mm->update_view();
     mm->show_point_cloud();
 
     // // mm->filter_supervoxels_through_background();
     // mm->filter_points_near_cameras(5.0);
 
-    // mm->set_view_type(0);
+    // mm->set_view_type(MapManager::ORIG_PCD);
     // mm->update_view();
     // mm->show_point_cloud();
 
@@ -76,18 +76,18 @@ void processing(shared_ptr<MapManager>& mm) {
     // mm->show_point_cloud();
 
     // mm->assign_supervoxel_label_to_filtered_pcd();
-    // mm->set_view_type(2);
+    // mm->set_view_type(MapManager::LABELED_PCD);
     // mm->update_view();
     // mm->show_point_cloud();
 
     // mm->filter_supervoxels_through_background("labeled");
-    // mm->set_view_type(2);
+    // mm->set_view_type(MapManager::LABELED_PCD);
     // mm->update_view();
     // mm->show_point_cloud();
 
     // // label compression may not work properly for m_label_pcd
     // // mm-filter_minor_segmentations(30, "labeled");
-    // mm->set_view_type(2);
+    // mm->set_view_type(MapManager::LABELED_PCD);
     // mm->update_view();
     // mm->show_point_cloud();
 

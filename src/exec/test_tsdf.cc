@@ -13,6 +13,7 @@
 #include "json.h"
 #include "utils.h"
 #include "MapManager.h"
+#include <bits/stdc++.h>
 
 using namespace std;
 using namespace lass;
@@ -48,6 +49,19 @@ void generate_centers(json& j, shared_ptr<MapManager>& mm) {
         center.y /= point_counter[idx];
         center.z /= point_counter[idx];
         GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
+        {
+            // debug section
+            // make sure each color only map to one label
+            char color_str[256];
+            sprintf(color_str, "%03d%03d%03d", center.r, center.g, center.b);
+            std::string color_s(color_str);
+            static std::unordered_map<std::string, uint32_t> color_map;
+            if (color_map.count(color_s) > 0) {
+                CHECK(color_map[color_s] == idx);
+            } else {
+                color_map[color_s] = idx;
+            }
+        }
         j.push_back(
             {center.x, center.y, center.z, center.r, center.g, center.b}
         );
@@ -94,16 +108,17 @@ void processing(shared_ptr<MapManager>& mm) {
         mm->m_index_of_landmark->indices[idx] = idx;
     }
     mm->update_view();
-    // mm->show_point_cloud();
+    mm->show_point_cloud();
 
-    mm->supervoxel_landmark_clustering(0.015, 0.4, 1.0, 0.0, 0.0);
-    mm->set_view_type(1);
-    mm->update_view();
+    mm->supervoxel_landmark_clustering(0.015, 0.2, 1.0, 0.0, 0.0);
+    // mm->set_view_target_pcd(true);
+    // mm->update_view();
     // mm->show_point_cloud();
     
     mm->filter_minor_segmentations(30);
+    mm->m_pcd = mm->extract_points_from_supervoxel();
     mm->update_view();
-    // mm->show_point_cloud();
+    mm->show_point_cloud();
 
 }
 
@@ -178,26 +193,36 @@ void test_raycasting_7scenes(int argc, char** argv) {
     ofstream jout(parameters_output_fn);
     jout << j_output.dump(4);
 
-    visualize_centers(j_output, mm);
+    // visualize_centers(j_output, mm);
 
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
     cv::Mat save_img(cv::Size(width, height), CV_8UC3);
     vector<string> image_fns;
+
+    vector<int>    label_mapping(mm->max_target_label);
+    for (int idx = 0; idx < mm->max_target_label; idx++) {
+        label_mapping[idx] = idx;
+    }
+    shuffle(label_mapping.begin(), label_mapping.end(), default_random_engine(0));
 
     for (int idx = 0; idx < es.size(); idx++) {
         auto& e = es[idx];
         fs::path fn = fns[idx];
         string image_fn;
         process_path(fn, target_path, image_fn);
+        cout << fn << endl;
+        cout << target_path << endl;
+        cout << image_fn << endl;
 
-        std::runtime_error("interface has been changed!");
-        // mm->raycasting_pcd(e, intrsinsics, pcd, true, 6, scale, "target");
+        // ybbbbt: dirty fix for new interface
+        mm->m_labeled_pcd = mm->m_target_pcd;
+        mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 auto& pt = pcd->points[j * width + i];
                 auto& c = save_img.at<cv::Vec3b>(j, i);
-
+                auto label = label_mapping[pt.label];
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
                 } else {
@@ -208,7 +233,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
         // cv::imwrite(image_fn, save_img);
         cv::imshow("show", save_img);
-        cv::waitKey(0);
+        // cv::imwrite("show.png", save_img);
+        cv::imwrite(image_fn, save_img);
+        // cv::waitKey(0);
     }
 }
 
