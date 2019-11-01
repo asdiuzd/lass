@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-seq_name='KingsCollege'
+seq_name='OldHospital'
+# seq_name='KingsCollege'
+# seq_name='ShopFacade'
 dataset_base_dir=~/Data/cambridge/
 
 cd ../bin
@@ -12,7 +14,7 @@ for ((i=1;i<=25;i++)); do
 done
 
 # run raycast
-./test_cambridge_landmark ${dataset_base_dir}/${seq_name}/fused_clear.ply ${dataset_base_dir}/${seq_name}/
+./test_cambridge_landmark ../scripts/cambridge_config/${seq_name}.json ${dataset_base_dir}/${seq_name}/
 
 # copy parameters
 cp train_list.json cambridge_raycast/
