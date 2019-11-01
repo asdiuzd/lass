@@ -185,6 +185,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
     // process map
     auto mm = make_shared<MapManager>();
+#if 1  // set 1 to disable viewer, for batch generation
+    mm->m_disable_viewer = true;
+#endif
     mm->load_ply_pcl(ply_path);
     processing(mm);
     mm->prepare_octree_for_target_pcd(0.02);
@@ -236,7 +239,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         }
 
         // cv::imwrite(image_fn, save_img);
-        cv::imshow("show", save_img);
+        // cv::imshow("show", save_img);
         // cv::imwrite("show.png", save_img);
         cv::imwrite(image_fn, save_img);
         // cv::waitKey(0);
