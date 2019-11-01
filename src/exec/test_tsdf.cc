@@ -222,7 +222,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
-        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.03, 0, 0);
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
