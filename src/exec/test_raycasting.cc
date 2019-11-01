@@ -40,12 +40,6 @@ using namespace pcl::visualization;
 using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
-inline void label_to_rgb(uchar &r, uchar &g, uchar &b, uint32_t label) {
-    r = label / (256 * 256);
-    g = (label / 256) % 256;
-    b = label % 256;
-}
-
 void processing(shared_ptr<MapManager>& mm) {
     // mm->filter_outliers(2, 10);
     mm->filter_outliers(0.01, 0);
@@ -294,14 +288,12 @@ void test_raycasting_robotcar(int argc, char** argv) {
                         if (use_training_colormap) {
                             // debug scope
                             // make sure each color map to only one label
-                            char color_str[256];
-                            sprintf(color_str, "%03d%03d%03d", c[0], c[1], c[2]);
-                            std::string color_s(color_str);
-                            static std::unordered_map<std::string, uint32_t> color_map;
-                            if (color_map.count(color_s) > 0) {
-                                CHECK(color_map[color_s] == pt.label);
+                            uint32_t unique_key = (c[0] << 8) + (c[1] << 4) + c[2];
+                            static std::map<uint32_t, uint32_t> color_map;
+                            if (color_map.count(unique_key) > 0) {
+                                CHECK(color_map[unique_key] == pt.label);
                             } else {
-                                color_map[color_s] = pt.label;
+                                color_map[unique_key] = pt.label;
                             }
                         }
                     }

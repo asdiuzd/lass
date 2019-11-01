@@ -95,6 +95,22 @@ inline double normalize_value(double value, double min, double max) {
     return (value - min) / (max - min);
 }
 
+inline void label_to_rgb(uchar &r, uchar &g, uchar &b, uint32_t label) {
+    // r = label / (256 * 256);
+    // set r to constant value, for better appearance
+    r = 200;
+    CHECK(label < 256 * 256);
+    g = (label / 256) % 256;
+    b = label % 256;
+}
+
+inline void hash_colormap(uchar &r, uchar &g, uchar &b, size_t label) {
+    size_t h = label * 6364136223846793005u + 1442695040888963407;
+    r = uchar(h & 0xFF);
+    g = uchar((h >> 4) & 0xFF);
+    b = uchar((h >> 8) & 0xFF);
+}
+
 void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
 void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs);
 

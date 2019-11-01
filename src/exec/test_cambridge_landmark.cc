@@ -391,21 +391,16 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
                 } else {
-                    // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
-                    // TODO(ybbbbt): colormap
-                    size_t h = pt.label * 6364136223846793005u + 1442695040888963407;
-                    c = cv::Vec3b{uchar(h & 0xFF), uchar((h >> 4) & 0xFF), uchar((h >> 8) & 0xFF)};
-                    if (1) {
+                    lass::label_to_rgb(c[0], c[1], c[2], pt.label);
+                    {
                         // debug scope
                         // make sure each color map to only one label
-                        char color_str[256];
-                        sprintf(color_str, "%03d%03d%03d", c[0], c[1], c[2]);
-                        std::string color_s(color_str);
-                        static std::unordered_map<std::string, uint32_t> color_map;
-                        if (color_map.count(color_s) > 0) {
-                            CHECK(color_map[color_s] == pt.label);
+                        uint32_t unique_key = (c[0] << 8) + (c[1] << 4) + c[2];
+                        static std::map<uint32_t, uint32_t> color_map;
+                        if (color_map.count(unique_key) > 0) {
+                            CHECK(color_map[unique_key] == pt.label);
                         } else {
-                            color_map[color_s] = pt.label;
+                            color_map[unique_key] = pt.label;
                         }
                     }
                 }
