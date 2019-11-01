@@ -110,7 +110,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->update_view();
     mm->show_point_cloud();
 
-    mm->supervoxel_landmark_clustering(0.015, 0.2, 1.0, 0.0, 0.0);
+    mm->supervoxel_landmark_clustering(0.015, 0.4, 1.0, 0.0, 0.0);
     // mm->set_view_target_pcd(true);
     // mm->update_view();
     // mm->show_point_cloud();
@@ -169,7 +169,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
     const int scale = 1;
     const int width = 640 / scale, height = 480 / scale;
-    const float fx = 585 / scale, fy = 585 / scale;
+    // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    float rgb_focal = 520;
+    const float fx = rgb_focal / scale, fy = rgb_focal / scale;
     const float cx = 320 / scale, cy = 240 / scale;
     const camera_intrinsics intrsinsics{
         .cx = cx, .cy = cy, .fx = fx, .fy = fy, .width = width, .height = height
@@ -206,7 +208,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     shuffle(label_mapping.begin(), label_mapping.end(), default_random_engine(0));
 
     for (int idx = 0; idx < es.size(); idx++) {
-        auto& e = es[idx];
+        Eigen::Matrix4f e = es[idx];
         fs::path fn = fns[idx];
         string image_fn;
         process_path(fn, target_path, image_fn);
@@ -216,6 +218,8 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
+        // fix 7 scenes gt
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.03, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
