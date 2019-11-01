@@ -8,6 +8,18 @@
 
 using json = nlohmann::json;
 using namespace lass;
+
+inline void repaint_color(cv::Mat &img) {
+    for (int i = 0; i < img.rows; ++i) {
+        for (int j = 0; j < img.cols; ++j) {
+            auto &c = img.at<cv::Vec3b>(i, j);
+            if (c[1] == 0 && c[2] == 0) continue;
+            uint32_t unique_key = (c[0] << 8) + (c[1] << 4) + c[2];
+            hash_colormap(c[0], c[1], c[2], unique_key);
+        }
+    }
+}
+
 // args path_to_source_images path_to_raycast_images path_to_tran_test_list_json_base_dir src_img_format(jpg or png)
 int main(int argc, char **argv) {
     const std::string src_prefix = argv[1];
@@ -38,6 +50,7 @@ int main(int argc, char **argv) {
         // std::cout << name << std::endl;
         cv::Mat img_src = cv::imread(src_prefix + "/" + name.substr(0, name.length() - 3) + src_img_format);
         cv::Mat img_cast = cv::imread(seg_prefix + "/" + name);
+        repaint_color(img_cast);
         auto sz = cv::Size(img_src.cols / 2, img_src.rows / 2);
         cv::resize(img_src, img_src, sz);
         cv::resize(img_cast, img_cast, sz);

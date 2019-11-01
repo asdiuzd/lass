@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 
-seq_name='KingsCollege'
+# seq_name='OldHospital'
+# seq_name='KingsCollege'
+seq_name='ShopFacade'
 dataset_base_dir=~/Data/cambridge/
 
 cd ../bin
 
 rm -rf cambridge_raycast
+rm -rf cambridge_all/${seq_name}
 
 for ((i=1;i<=25;i++)); do
     mkdir -p cambridge_raycast/seq$i
 done
 
 # run raycast
-./test_cambridge_landmark ${dataset_base_dir}/${seq_name}/fused_clear.ply ${dataset_base_dir}/${seq_name}/
+./test_cambridge_landmark ../scripts/cambridge_config/${seq_name}.json ${dataset_base_dir}/${seq_name}/
 
 # copy parameters
 cp train_list.json cambridge_raycast/
