@@ -9,6 +9,7 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <map>
 #include <sstream>
+#include <random>
 #include <thread>
 #include <chrono>
 #include <opencv2/opencv.hpp>
@@ -33,6 +34,13 @@ struct PoseData {
 
 std::vector<Eigen::Matrix4f> g_Twcs;
 } // namespace
+
+inline float rand01() {
+    static std::random_device dev;
+    static std::mt19937 rng(dev());
+    static std::uniform_real_distribution<float> rand01_d(0, 1);
+    return rand01_d(rng);
+}
 
 inline std::vector<PoseData> load_cambridge_pose_txt(const std::string filename) {
     std::vector<PoseData> pose_data;
@@ -206,9 +214,22 @@ std::vector<pcl::PointXYZRGB> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr
 
 void point_process(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<pcl::PointXYZRGB> &centers) {
     auto &curr_pcd = input_pcd;
+    // uniform downsample
+    {
+        pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+        float downsample_ratio = 0.1;
+        for (int i = 0; i < curr_pcd->points.size(); ++i) {
+            if (rand01() > downsample_ratio) outliers->indices.push_back(i);
+        }
+        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+        extract.setInputCloud(curr_pcd);
+        extract.setIndices(outliers);
+        extract.setNegative(true);
+        extract.filter(*curr_pcd);
+    }
     // Statistical filtering outliers
     {
-        const float meanK = 6.0;
+        const float meanK = 25.0;
         const float stddev = 2.0;
         pcl::PointCloud<PointXYZRGB>::Ptr cloud = curr_pcd;
         pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);

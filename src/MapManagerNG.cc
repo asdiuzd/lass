@@ -165,6 +165,8 @@ void MapManager::filter_and_clustering() {
             for (int i = 0; i < local_labeled_cloud->points.size(); ++i) {
                 if (local_labeled_cloud->points[i].label == 0) {
                     outliers->indices.push_back(i);
+                    LOG(FATAL) << "Invalid label found in cluster level supervoxel!";
+                    CHECK(false);
                 }
             }
             pcl::ExtractIndices<pcl::PointXYZL> extract;
