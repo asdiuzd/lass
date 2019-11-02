@@ -52,7 +52,7 @@ void generate_centers(json& j, shared_ptr<MapManager>& mm) {
         {
             // debug scope
             // make sure each color map to only one label
-            uint32_t unique_key = (center.r << 8) + (center.g << 4) + center.b;
+            uint32_t unique_key = (uint32_t(center.r) << 16) + (uint32_t(center.g) << 8) + uint32_t(center.b);
             static std::map<uint32_t, uint32_t> color_map;
             if (color_map.count(unique_key) > 0) {
                 CHECK(color_map[unique_key] == idx);
