@@ -48,6 +48,7 @@ public:
     bool m_show_camera_extrinsics = false;  // visualize camera trajectory/extrinsics
     pcl::visualization::PCLVisualizer::Ptr m_viewer;                                // viewer
     int max_target_label;
+    bool m_disable_viewer = false;
     
     std::vector<std::string> m_semantic_names;
     std::vector<std::string> m_landmarks_semantic_names, m_background_semantic_names, m_removed_semantic_names;

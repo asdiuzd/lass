@@ -50,17 +50,15 @@ void generate_centers(json& j, shared_ptr<MapManager>& mm) {
         center.z /= point_counter[idx];
         GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
         {
-            // debug section
-            // make sure each color only map to one label
-            char color_str[256];
-            sprintf(color_str, "%03d%03d%03d", center.r, center.g, center.b);
-            std::string color_s(color_str);
-            static std::unordered_map<std::string, uint32_t> color_map;
-            if (color_map.count(color_s) > 0) {
-                CHECK(color_map[color_s] == idx);
+            // debug scope
+            // make sure each color map to only one label
+            uint32_t unique_key = (center.r << 8) + (center.g << 4) + center.b;
+            static std::map<uint32_t, uint32_t> color_map;
+            if (color_map.count(unique_key) > 0) {
+                CHECK(color_map[unique_key] == idx);
             } else {
-                color_map[color_s] = idx;
-            }
+                color_map[unique_key] = idx;
+            }     
         }
         j.push_back(
             {center.x, center.y, center.z, center.r, center.g, center.b}
@@ -110,7 +108,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->update_view();
     mm->show_point_cloud();
 
-    mm->supervoxel_landmark_clustering(0.015, 0.2, 1.0, 0.0, 0.0);
+    mm->supervoxel_landmark_clustering(0.015, 0.4, 1.0, 0.0, 0.0);
     // mm->set_view_target_pcd(true);
     // mm->update_view();
     // mm->show_point_cloud();
@@ -169,7 +167,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
     const int scale = 1;
     const int width = 640 / scale, height = 480 / scale;
-    const float fx = 585 / scale, fy = 585 / scale;
+    // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    float rgb_focal = 520;
+    const float fx = rgb_focal / scale, fy = rgb_focal / scale;
     const float cx = 320 / scale, cy = 240 / scale;
     const camera_intrinsics intrsinsics{
         .cx = cx, .cy = cy, .fx = fx, .fy = fy, .width = width, .height = height
@@ -183,6 +183,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
     // process map
     auto mm = make_shared<MapManager>();
+#if 1  // set 1 to disable viewer, for batch generation
+    mm->m_disable_viewer = true;
+#endif
     mm->load_ply_pcl(ply_path);
     processing(mm);
     mm->prepare_octree_for_target_pcd(0.02);
@@ -206,7 +209,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     shuffle(label_mapping.begin(), label_mapping.end(), default_random_engine(0));
 
     for (int idx = 0; idx < es.size(); idx++) {
-        auto& e = es[idx];
+        Eigen::Matrix4f e = es[idx];
         fs::path fn = fns[idx];
         string image_fn;
         process_path(fn, target_path, image_fn);
@@ -216,6 +219,8 @@ void test_raycasting_7scenes(int argc, char** argv) {
 
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
+        // fix 7 scenes gt
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
@@ -232,7 +237,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         }
 
         // cv::imwrite(image_fn, save_img);
-        cv::imshow("show", save_img);
+        // cv::imshow("show", save_img);
         // cv::imwrite("show.png", save_img);
         cv::imwrite(image_fn, save_img);
         // cv::waitKey(0);

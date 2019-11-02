@@ -55,6 +55,7 @@ void MapManager::initialize_viewer() {
 }
 
 void MapManager::update_view() {
+    if (m_disable_viewer) return;
     m_viewer->removeAllPointClouds();
     m_viewer->setBackgroundColor (0, 0, 0);
     switch (m_view_type) {
@@ -532,6 +533,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points_from_supervoxe
 }
 
 void MapManager::show_point_cloud() {
+    if (m_disable_viewer) return;
     stop_view = false;
     while (!stop_view && !m_viewer->wasStopped()) {
         m_viewer->spinOnce(100);
