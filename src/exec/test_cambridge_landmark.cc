@@ -395,7 +395,7 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
                     {
                         // debug scope
                         // make sure each color map to only one label
-                        uint32_t unique_key = (c[0] << 8) + (c[1] << 4) + c[2];
+                        uint32_t unique_key = (uint32_t(c[0]) << 16) + (uint32_t(c[1]) << 8) + uint32_t(c[2]);
                         static std::map<uint32_t, uint32_t> color_map;
                         if (color_map.count(unique_key) > 0) {
                             CHECK(color_map[unique_key] == pt.label);

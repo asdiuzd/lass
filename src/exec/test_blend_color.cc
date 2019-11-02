@@ -14,7 +14,7 @@ inline void repaint_color(cv::Mat &img) {
         for (int j = 0; j < img.cols; ++j) {
             auto &c = img.at<cv::Vec3b>(i, j);
             if (c[1] == 0 && c[2] == 0) continue;
-            uint32_t unique_key = (c[0] << 8) + (c[1] << 4) + c[2];
+            uint32_t unique_key = (uint32_t(c[0]) << 16) + (uint32_t(c[1]) << 8) + uint32_t(c[2]);
             hash_colormap(c[0], c[1], c[2], unique_key);
         }
     }
