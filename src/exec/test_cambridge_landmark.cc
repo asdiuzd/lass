@@ -30,6 +30,7 @@ struct PoseData {
     std::string filename;
     Eigen::Quaternionf q;
     Eigen::Vector3f p;
+    float focal;
 };
 
 std::vector<Eigen::Matrix4f> g_Twcs;
@@ -42,7 +43,7 @@ inline float rand01() {
     return rand01_d(rng);
 }
 
-inline std::vector<PoseData> load_cambridge_pose_txt(const std::string filename) {
+inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename, std::map<std::string, float> &focal_map) {
     std::vector<PoseData> pose_data;
     if (FILE *file = fopen(filename.c_str(), "r")) {
         char header_line[2048];
@@ -60,6 +61,8 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string filename)
             // convert to Twc
             pose.q = pose.q.conjugate();
             pose.filename = filename_buffer;
+            CHECK(focal_map.count(pose.filename) > 0);
+            pose.focal = focal_map[pose.filename];
             pose_data.push_back(pose);
         }
         fclose(file);
@@ -67,6 +70,25 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string filename)
         std::cerr << "cannot open " << filename << "\n";
     }
     return pose_data;
+}
+
+inline std::map<std::string, float> load_focal_map_from_nvm(const std::string &filename) {
+    std::vector<CameraF> cameras;
+    std::vector<Point3DF> points;
+    std::vector<Point2D> measurements;
+    std::vector<int> pidx;
+    std::vector<int> cidx;
+    std::vector<std::string> names;
+    std::vector<int> ptc;
+    lass::load_nvm_file(filename.c_str(), cameras, points, measurements, pidx, cidx, names, ptc);
+    std::map<std::string, float> focal_map;
+    CHECK(cameras.size() == names.size());
+    for (int i = 0; i < cameras.size(); ++i) {
+        std::string filename = names[i];
+        filename = filename.substr(0, filename.length() - 3) + "png";
+        focal_map[filename] = cameras[i].f;
+    }
+    return focal_map;
 }
 
 void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr) {
@@ -329,6 +351,7 @@ void dump_parameters(const std::vector<pcl::PointXYZRGB> &cluster_centers,
                 j_es[p.filename].push_back(Tcw(r, c));
             }
         }
+        j_es[p.filename].push_back(p.focal);
     }
 
     ofstream o_es("out_extrinsics.json");
@@ -359,10 +382,6 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
         int ret = system(("mkdir -p " + fname).c_str());
     }
     camera_intrinsics K;
-    float focal = 1673.274048;
-    focal /= 4;
-    K.fx = focal;
-    K.fy = focal;
     K.cx = 240;
     K.cy = 135;
     K.width = 480;
@@ -377,9 +396,14 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
     mm->m_labeled_pcd = labeled_pcd;
     mm->prepare_octree_for_target_pcd(0.3);
     for (int i = 0; i < poses_twc.size(); ++i) {
+        const auto &p = poses_twc[i];
+        // set focal
+        float focal = p.focal;
+        focal /= 4;
+        K.fx = focal;
+        K.fy = focal;
         Eigen::Matrix4f Tcw;
         Tcw.setIdentity();
-        const auto &p = poses_twc[i];
         Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
         mm->raycasting_pcd(Tcw, K, pcd, cluster_centers, true, 3, 1.0, "labeled");
@@ -424,8 +448,9 @@ int main(int argc, char **argv) {
     const std::string data_base_dir(argv[2]);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
-    auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt");
-    auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt");
+    auto focal_map = load_focal_map_from_nvm(data_base_dir + "/reconstruction.nvm");
+    auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
+    auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());

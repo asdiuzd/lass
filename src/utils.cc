@@ -93,7 +93,7 @@ bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, ve
 
 
 bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx,
-    std::vector<int>& cidx, std::vector<std::string> names, std::vector<int>& ptc
+    std::vector<int>& cidx, std::vector<std::string> &names, std::vector<int>& ptc
 ) {
     ifstream in(fn);
     int rotation_parameter_num = 4;
