@@ -8,5 +8,12 @@
     "supervoxel" : {
         "voxel_resolution" : 0.1,
         "seed_resolution" : 2.0
+    },
+    "sparse" : {
+        "downsample_ratio": 0.01,
+        "statical_filter": {
+            "mean_K" : 25.0,
+            "stddev" : 0.1
+        }
     }
 }

@@ -33,6 +33,21 @@ struct PoseData {
     float focal;
 };
 
+struct Cluster {
+    Cluster() {
+        center.setZero();
+        center_orig.setZero();
+        bbox_min = {std::numeric_limits<float>::max(),
+                    std::numeric_limits<float>::max(),
+                    std::numeric_limits<float>::max()};
+        bbox_max = -bbox_min;
+    }
+    Eigen::Vector3f center;
+    Eigen::Vector3f center_orig;
+    Eigen::Vector3f bbox_min;
+    Eigen::Vector3f bbox_max;
+};
+
 std::vector<Eigen::Matrix4f> g_Twcs;
 } // namespace
 
@@ -117,14 +132,14 @@ void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool vis
     viewer->addPointCloud(cloud, cloud_color_handler, "base_cloud");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 0.5, "base_cloud");
     viewer->addCoordinateSystem(1.0);
-    lass::add_camera_trajectory_to_viewer(viewer, g_Twcs);
+    if (visualize_trajectory) lass::add_camera_trajectory_to_viewer(viewer, g_Twcs);
     while (!viewer->wasStopped() && !g_stop_view) {
         viewer->spinOnce(100);
     }
     g_stop_view = false;
 }
 
-void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<pcl::PointXYZRGB> *centers = nullptr) {
+void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<Cluster> *centers = nullptr) {
     std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
     viewer->registerKeyboardCallback(keyboard_callback, nullptr);
     viewer->addPointCloud(cloud, "base_cloud");
@@ -132,14 +147,25 @@ void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::v
     viewer->addCoordinateSystem(1.0);
     if (centers) {
         pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
-        for (auto p : *centers) {
-            p.r = 255;
-            p.g = p.b = 0;
-            centers_pcd->points.push_back(p);
+        for (const auto &c : *centers) {
+            pcl::PointXYZRGB pt;
+            pt.x = c.center.x();
+            pt.y = c.center.y();
+            pt.z = c.center.z();
+            pt.r = 255;
+            pt.g = pt.b = 0;
+            centers_pcd->points.push_back(pt);
+            pt.x = c.center_orig.x();
+            pt.y = c.center_orig.y();
+            pt.z = c.center_orig.z();
+            pt.r = 0;
+            pt.g = 0;
+            pt.b = 255;
+            centers_pcd->points.push_back(pt);
         }
         pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
         viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
-        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,15, "center_cloud");
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15, "center_cloud");
     }
     while (!viewer->wasStopped() && !g_stop_view) {
         viewer->spinOnce(100);
@@ -182,7 +208,7 @@ void visualize_label_points_from_rgb(pcl::PointCloud<pcl::PointXYZRGB>::Ptr clou
 }
 
 // remove too small clusters, compress labels, compute and return cluster centers
-std::vector<pcl::PointXYZRGB> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr pcd, float small_cluster_thresh = 1.5) {
+std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr pcd, float small_cluster_thresh = 1.5) {
     // find too small clusters
     using min_max_pair = std::pair<Eigen::Vector3f, Eigen::Vector3f>;
     // label->min_max_pair
@@ -239,25 +265,28 @@ std::vector<pcl::PointXYZRGB> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr
     extract.setNegative(true);
     extract.filter(*pcd);
     // compute centers
-    std::vector<pcl::PointXYZRGB> centers(label_idx, pcl::PointXYZRGB(0, 0, 0));
-    centers[0].x = centers[0].y = centers[0].z = 0;
+    std::vector<Cluster> centers(label_idx);
     std::vector<int> centers_counter(centers.size(), 0);
     for (const auto &p : pcd->points) {
-        centers[p.label].x += p.x;
-        centers[p.label].y += p.y;
-        centers[p.label].z += p.z;
+        auto &c = centers[p.label];
+        c.center += Eigen::Vector3f(p.x, p.y, p.z);
+        c.bbox_min.x() = std::min(c.bbox_min.x(), p.x);
+        c.bbox_min.y() = std::min(c.bbox_min.y(), p.y);
+        c.bbox_min.z() = std::min(c.bbox_min.z(), p.z);
+        c.bbox_max.x() = std::max(c.bbox_max.x(), p.x);
+        c.bbox_max.y() = std::max(c.bbox_max.y(), p.y);
+        c.bbox_max.z() = std::max(c.bbox_max.z(), p.z);
         centers_counter[p.label]++;
     }
     for (int i = 0; i < centers.size(); ++i) {
         int sz = std::max(1, centers_counter[i]);
-        centers[i].x /= sz;
-        centers[i].y /= sz;
-        centers[i].z /= sz;
+        centers[i].center /= sz;
+        centers[i].center_orig = centers[i].center;
     }
     return centers;
 }
 
-void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<pcl::PointXYZRGB> &centers) {
+void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<Cluster> &centers) {
     auto &curr_pcd = input_pcd;
     // uniform downsample
     {
@@ -344,7 +373,7 @@ void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
     output_labeled_pcd = curr_pcd_labeled;
 }
 
-void set_centers_to_closest_sparse_point(std::vector<pcl::PointXYZRGB> &centers, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+void set_centers_to_closest_sparse_point(std::vector<Cluster> &centers, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
     pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
     kdtree.setInputCloud(cloud);
     int K = 1;
@@ -352,20 +381,37 @@ void set_centers_to_closest_sparse_point(std::vector<pcl::PointXYZRGB> &centers,
     std::vector<float> distances(K);
     for (int idx = 0; idx < centers.size(); ++idx) {
         auto &orig_c = centers[idx];
-        if (kdtree.nearestKSearch(orig_c, K, point_indices, distances) > 0) {
+        pcl::PointXYZRGB pt;
+        pt.x = orig_c.center.x();
+        pt.y = orig_c.center.y();
+        pt.z = orig_c.center.z();
+        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {
             auto &new_c = cloud->points[point_indices[0]];
-            orig_c.x = new_c.x;
-            orig_c.y = new_c.y;
-            orig_c.z = new_c.z;
+            if (new_c.x > orig_c.bbox_max.x() || new_c.y > orig_c.bbox_max.y() || new_c.z > orig_c.bbox_max.z()) continue;
+            if (new_c.x < orig_c.bbox_min.x() || new_c.y < orig_c.bbox_min.y() || new_c.z < orig_c.bbox_min.z()) continue;
+            orig_c.center = {new_c.x, new_c.y, new_c.z};
         }
     }
 }
 
-inline void filter_nvm_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+inline void filter_to_sparse_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, json &j_config) {
+    // uniform downsample
+    {
+        pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+        float downsample_ratio = j_config["sparse"]["downsample_ratio"];
+        for (int i = 0; i < cloud->points.size(); ++i) {
+            if (rand01() > downsample_ratio) outliers->indices.push_back(i);
+        }
+        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+        extract.setInputCloud(cloud);
+        extract.setIndices(outliers);
+        extract.setNegative(true);
+        extract.filter(*cloud);
+    }
     // Statistical filtering outliers
     {
-        const float meanK = 30;
-        const float stddev = 0.05;
+        const float meanK = j_config["sparse"]["statical_filter"]["mean_K"];
+        const float stddev = j_config["sparse"]["statical_filter"]["stddev"];
         pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
 
         LOG(INFO) << "Statistical filtering outliers..." << std::endl;
@@ -385,20 +431,18 @@ inline void filter_nvm_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
     }
 }
 
-void dump_parameters(const std::vector<pcl::PointXYZRGB> &cluster_centers,
+void dump_parameters(const std::vector<Cluster> &cluster_centers,
                      const std::vector<PoseData> &train_poses_twc,
                      const std::vector<PoseData> &test_poses_twc,
                      const std::vector<PoseData> &all_poses_twc) {
     const auto &centers = cluster_centers;
     json j_centers;
     j_centers.push_back(
-        {centers[0].x, centers[0].y, centers[0].z});
+        {centers[0].center.x(), centers[0].center.y(), centers[0].center.z()});
 
     for (int idx = 1; idx < centers.size(); idx++) {
         auto center = centers[idx];
-        GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, centers.size()));
-        j_centers.push_back(
-            {center.x, center.y, center.z});
+        j_centers.push_back({center.center.x(), center.center.y(), center.center.z()});
     }
     ofstream o_id2centers{"id2centers.json"};
     o_id2centers << std::setw(4) << j_centers;
@@ -439,7 +483,7 @@ void dump_parameters(const std::vector<pcl::PointXYZRGB> &cluster_centers,
     LOG(INFO) << "finished output json" << endl;
 }
 
-void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::vector<pcl::PointXYZRGB> &cluster_centers) {
+void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::vector<Cluster> &cluster_centers) {
     // create folders
     for (int i = 1; i < 25; ++i) {
         std::string fname = folder_prefix + "seq" + std::to_string(i);
@@ -459,6 +503,17 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
     mm->m_target_pcd = labeled_pcd;
     mm->m_labeled_pcd = labeled_pcd;
     mm->prepare_octree_for_target_pcd(0.3);
+
+    // convert to pcl type cluster center
+    std::vector<pcl::PointXYZRGB> pcl_centers;
+    for (const auto &c : cluster_centers) {
+        pcl::PointXYZRGB pt;
+        pt.x = c.center.x();
+        pt.y = c.center.y();
+        pt.z = c.center.z();
+        pcl_centers.emplace_back(pt);
+    }
+
     for (int i = 0; i < poses_twc.size(); ++i) {
         const auto &p = poses_twc[i];
         // set focal
@@ -470,7 +525,7 @@ void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<p
         Tcw.setIdentity();
         Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
-        mm->raycasting_pcd(Tcw, K, pcd, cluster_centers, true, 3, 1.0, "labeled");
+        mm->raycasting_pcd(Tcw, K, pcd, pcl_centers, true, 3, 1.0, "labeled");
         // draw to cv::Mat
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
@@ -531,12 +586,15 @@ int main(int argc, char **argv) {
     g_Twcs = Twcs;
 
     visualize_rgb_points(curr_pcd);
-    // visualize_rgb_points(nvm_pcd, false);
-    // filter_nvm_pcd(nvm_pcd);
-    // visualize_rgb_points(nvm_pcd, false);
+
+    // filter to sparse point 
+    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr sparse_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
+    // pcl::copyPointCloud(*curr_pcd, *sparse_pcd);
+    // filter_to_sparse_pcd(sparse_pcd, j_config);
+    // visualize_rgb_points(sparse_pcd);
 
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
-    std::vector<pcl::PointXYZRGB> cluster_centers;
+    std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
     // set_centers_to_closest_sparse_point(cluster_centers, nvm_pcd);
 
