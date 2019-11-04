@@ -73,7 +73,8 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename
     return pose_data;
 }
 
-inline std::map<std::string, float> load_focal_map_from_nvm(const std::string &filename) {
+inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+    focal_map.clear();
     std::vector<CameraF> cameras;
     std::vector<Point3DF> points;
     std::vector<Point2D> measurements;
@@ -82,14 +83,24 @@ inline std::map<std::string, float> load_focal_map_from_nvm(const std::string &f
     std::vector<std::string> names;
     std::vector<int> ptc;
     lass::load_nvm_file(filename.c_str(), cameras, points, measurements, pidx, cidx, names, ptc);
-    std::map<std::string, float> focal_map;
     CHECK(cameras.size() == names.size());
     for (int i = 0; i < cameras.size(); ++i) {
         std::string filename = names[i];
         filename = filename.substr(0, filename.length() - 3) + "png";
         focal_map[filename] = cameras[i].f;
     }
-    return focal_map;
+    for (int i = 0; i < points.size(); ++i) {
+        pcl::PointXYZRGB pt;
+        pt.x = points[i].xyz[0];
+        pt.y = points[i].xyz[1];
+        pt.z = points[i].xyz[2];
+        float xxx = pt.x + pt.y + pt.z;
+        if (std::isnan(xxx) || std::isinf(xxx)) continue;
+        if (std::abs(pt.x) > 1000 || std::abs(pt.y) > 1000 || std::abs(pt.z) > 1000) continue;
+        pt.r = pt.g = pt.b = 200;
+        cloud->points.push_back(pt);
+    }
+    print_var(points.size());
 }
 
 void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr) {
@@ -99,7 +110,7 @@ void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr
     }
 }
 
-void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
+void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool visualize_trajectory = true) {
     std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(cloud);
     viewer->registerKeyboardCallback(keyboard_callback, nullptr);
@@ -113,13 +124,23 @@ void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
     g_stop_view = false;
 }
 
-void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud) {
+void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<pcl::PointXYZRGB> *centers = nullptr) {
     std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZL> cloud_color_handler(cloud);
     viewer->registerKeyboardCallback(keyboard_callback, nullptr);
     viewer->addPointCloud(cloud, "base_cloud");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 0.5, "base_cloud");
     viewer->addCoordinateSystem(1.0);
+    if (centers) {
+        pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
+        for (auto p : *centers) {
+            p.r = 255;
+            p.g = p.b = 0;
+            centers_pcd->points.push_back(p);
+        }
+        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
+        viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE,15, "center_cloud");
+    }
     while (!viewer->wasStopped() && !g_stop_view) {
         viewer->spinOnce(100);
     }
@@ -228,9 +249,10 @@ std::vector<pcl::PointXYZRGB> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr
         centers_counter[p.label]++;
     }
     for (int i = 0; i < centers.size(); ++i) {
-        centers[i].x /= centers_counter[i];
-        centers[i].y /= centers_counter[i];
-        centers[i].z /= centers_counter[i];
+        int sz = std::max(1, centers_counter[i]);
+        centers[i].x /= sz;
+        centers[i].y /= sz;
+        centers[i].z /= sz;
     }
     return centers;
 }
@@ -320,6 +342,47 @@ void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
 #endif
     }
     output_labeled_pcd = curr_pcd_labeled;
+}
+
+void set_centers_to_closest_sparse_point(std::vector<pcl::PointXYZRGB> &centers, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+    pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
+    kdtree.setInputCloud(cloud);
+    int K = 1;
+    std::vector<int> point_indices(K);
+    std::vector<float> distances(K);
+    for (int idx = 0; idx < centers.size(); ++idx) {
+        auto &orig_c = centers[idx];
+        if (kdtree.nearestKSearch(orig_c, K, point_indices, distances) > 0) {
+            auto &new_c = cloud->points[point_indices[0]];
+            orig_c.x = new_c.x;
+            orig_c.y = new_c.y;
+            orig_c.z = new_c.z;
+        }
+    }
+}
+
+inline void filter_nvm_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+    // Statistical filtering outliers
+    {
+        const float meanK = 30;
+        const float stddev = 0.05;
+        pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
+
+        LOG(INFO) << "Statistical filtering outliers..." << std::endl;
+        LOG(INFO) << stddev << ", " << meanK << std::endl;
+
+        StatisticalOutlierRemoval<PointXYZRGB> sor;
+        sor.setInputCloud(cloud);
+        sor.setMeanK(meanK);
+        sor.setStddevMulThresh(stddev);
+        // sor.setNegative(false);
+        sor.filter(*cloud_filtered);
+
+        LOG(INFO) << "before filtering:\tpoint number = " << cloud->points.size() << endl;
+        LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
+        LOG(INFO) << "filtered number = " << cloud->points.size() - cloud_filtered->points.size() << endl;
+        cloud = cloud_filtered;
+    }
 }
 
 void dump_parameters(const std::vector<pcl::PointXYZRGB> &cluster_centers,
@@ -449,7 +512,9 @@ int main(int argc, char **argv) {
     const std::string data_base_dir(argv[2]);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
-    auto focal_map = load_focal_map_from_nvm(data_base_dir + "/reconstruction.nvm");
+    std::map<std::string, float> focal_map;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
+    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, nvm_pcd);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
 
@@ -466,12 +531,16 @@ int main(int argc, char **argv) {
     g_Twcs = Twcs;
 
     visualize_rgb_points(curr_pcd);
+    // visualize_rgb_points(nvm_pcd, false);
+    // filter_nvm_pcd(nvm_pcd);
+    // visualize_rgb_points(nvm_pcd, false);
 
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
     std::vector<pcl::PointXYZRGB> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
+    // set_centers_to_closest_sparse_point(cluster_centers, nvm_pcd);
 
-    visualize_labeled_points(labeled_pcd);
+    visualize_labeled_points(labeled_pcd, &cluster_centers);
     dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
     raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
     LOG(INFO) << "Finish All";
