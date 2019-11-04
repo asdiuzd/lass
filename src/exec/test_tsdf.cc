@@ -244,6 +244,39 @@ void test_raycasting_7scenes(int argc, char** argv) {
     }
 }
 
+void test_normalize_rotations(int argc, char ** argv) {
+    /*
+        argv[1] - json fn
+     */
+    json j_input;
+    const char * json_fn = argv[1];
+    CHECK(fs::exists(json_fn)) << "json does not exist: " << json_fn << endl;
+    ifstream j_in(json_fn);
+    j_in >> j_input;
+
+    const string ply_path = j_input["model"].get<string>();
+    const string base_path = j_input["base_path"].get<string>();
+    const string scene = j_input["scene"].get<string>();
+    string target_path = (fs::path(j_input["target_path"].get<string>()) / scene).string();
+    const string parameters_output_fn = fs::path(target_path) / j_input["parameters_fn"].get<string>();
+    json j_output;
+    // const char * target_path = target_path_str.c_str();
+
+    CHECK(fs::exists(ply_path)) << "model does not exist: " << ply_path << endl;
+    CHECK(fs::exists(base_path)) << "path does not exist: " << base_path << endl;
+    if (!fs::exists(target_path)) {
+        // fs::create_directory(target_path);
+        string cmd = "mkdir -p " + target_path;
+        if (system(cmd.c_str()) == -1) {
+            cout << "failed to create " << cmd << endl;
+            return;
+        }
+    }
+    CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
+
+    normalize_7scenes_poses(base_path, scene);
+}
+
 int main(int argc, char** argv) {
     /*
         argv[1] -- dataset path
@@ -251,4 +284,5 @@ int main(int argc, char** argv) {
      */
 
     test_raycasting_7scenes(argc, argv);
+    // test_normalize_rotations(argc, argv);
 }

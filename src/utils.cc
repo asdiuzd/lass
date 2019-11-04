@@ -2,6 +2,7 @@
 #include<experimental/filesystem>
 #include<opencv2/opencv.hpp>
 #include<omp.h>
+#include<Eigen/Eigen>
 
 #include "utils.h"
 
@@ -217,8 +218,67 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
                     in >> e(r, c);
                 }
             }
-            e = e.inverse();
+            Eigen::Quaternionf q(e.block<3, 3>(0, 0));
+            q.normalize();
+            e.block(0, 0, 3, 3) = q.conjugate().toRotationMatrix();
+            e.block(0, 3, 3, 1) = - (q.conjugate() * e.block(0, 3, 3, 1));
             es.emplace_back(e);
+        }
+    }
+}
+
+bool normalize_7scenes_poses(const string base_path, const string scene) {
+    fs::path base_path_str{base_path};
+    string scene_str(scene), trainingset("TrainSplit.txt"), testset("TestSplit.txt");
+    int frame_number;
+    if (scene.compare("stairs") == 0) {
+        frame_number = 500;
+    } else {
+        frame_number = 1000;
+    }
+
+    string training_fn = (base_path_str / scene_str / trainingset).string();
+    string test_fn = (base_path_str / scene_str / testset).string();
+    vector<string> seqs;
+
+    load_sequences(training_fn.c_str(), seqs);
+    load_sequences(test_fn.c_str(), seqs);
+
+    /*
+        The matrix stored in file is camera-to-world.
+        We need world-to-camera.
+    */
+    stringstream s, target_s;
+    s.fill('0');
+    target_s.fill('0');
+    for (auto& seq : seqs) {
+        for (int idx = 0; idx < frame_number; idx++) {
+            s.str("");
+            target_s.str("");
+            s << "frame-" << setw(6) << idx << ".pose.txt";
+            target_s << "frame-" << setw(6) << idx << ".normpose.txt";
+            auto fn = (base_path_str / scene_str / seq / s.str()).string();
+            auto target_fn = (base_path_str / scene_str / seq / target_s.str()).string();
+            ifstream in(fn);
+            ofstream target_on(target_fn);
+            target_on << setiosflags(ios::scientific) <<setprecision(8);
+
+            Eigen::Matrix4f e;
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    in >> e(r, c);
+                }
+            }
+            Eigen::Quaternionf q(e.block<3, 3>(0, 0));
+            q.normalize();
+            e.block(0, 0, 3, 3) = q.toRotationMatrix();
+
+            for (int r = 0; r < 4; r++) {
+                for (int c = 0; c < 4; c++) {
+                    target_on << e(r, c) << "\t";
+                }
+                target_on << endl;
+            }
         }
     }
 }
