@@ -55,6 +55,9 @@ bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
                 r[3], r[4], r[5], t[1],
                 r[6], r[7], r[8], t[2],
                 0, 0, 0, 1;
+        Eigen::Quaternionf q(e.block<3, 3>(0, 0));
+        q.normalize();
+        e.block<3, 3>(0, 0) = q.matrix();
     }
     return true;
 }

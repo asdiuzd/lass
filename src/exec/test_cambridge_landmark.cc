@@ -59,6 +59,7 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename
                 break;
             }
             // convert to Twc
+            pose.q.normalize();
             pose.q = pose.q.conjugate();
             pose.filename = filename_buffer;
             CHECK(focal_map.count(pose.filename) > 0);
