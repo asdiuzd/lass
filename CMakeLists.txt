@@ -38,6 +38,7 @@ add_library(lass SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/src/utils.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManager.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/MapManagerNG.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/mesh_sampling.cc
 )
 
 target_compile_options(lass PUBLIC
