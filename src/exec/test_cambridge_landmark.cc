@@ -88,7 +88,7 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename
     return pose_data;
 }
 
-inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map) {
     focal_map.clear();
     std::vector<CameraF> cameras;
     std::vector<Point3DF> points;
@@ -104,18 +104,6 @@ inline void load_data_from_nvm(const std::string &filename, std::map<std::string
         filename = filename.substr(0, filename.length() - 3) + "png";
         focal_map[filename] = cameras[i].f;
     }
-    for (int i = 0; i < points.size(); ++i) {
-        pcl::PointXYZRGB pt;
-        pt.x = points[i].xyz[0];
-        pt.y = points[i].xyz[1];
-        pt.z = points[i].xyz[2];
-        float xxx = pt.x + pt.y + pt.z;
-        if (std::isnan(xxx) || std::isinf(xxx)) continue;
-        if (std::abs(pt.x) > 1000 || std::abs(pt.y) > 1000 || std::abs(pt.z) > 1000) continue;
-        pt.r = pt.g = pt.b = 200;
-        cloud->points.push_back(pt);
-    }
-    print_var(points.size());
 }
 
 void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr) {
@@ -373,27 +361,6 @@ void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr 
     output_labeled_pcd = curr_pcd_labeled;
 }
 
-void set_centers_to_closest_sparse_point(std::vector<Cluster> &centers, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
-    pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
-    kdtree.setInputCloud(cloud);
-    int K = 1;
-    std::vector<int> point_indices(K);
-    std::vector<float> distances(K);
-    for (int idx = 0; idx < centers.size(); ++idx) {
-        auto &orig_c = centers[idx];
-        pcl::PointXYZRGB pt;
-        pt.x = orig_c.center.x();
-        pt.y = orig_c.center.y();
-        pt.z = orig_c.center.z();
-        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {
-            auto &new_c = cloud->points[point_indices[0]];
-            if (new_c.x > orig_c.bbox_max.x() || new_c.y > orig_c.bbox_max.y() || new_c.z > orig_c.bbox_max.z()) continue;
-            if (new_c.x < orig_c.bbox_min.x() || new_c.y < orig_c.bbox_min.y() || new_c.z < orig_c.bbox_min.z()) continue;
-            orig_c.center = {new_c.x, new_c.y, new_c.z};
-        }
-    }
-}
-
 inline void filter_to_sparse_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, json &j_config) {
     // uniform downsample
     {
@@ -568,8 +535,7 @@ int main(int argc, char **argv) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
     std::map<std::string, float> focal_map;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
-    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, nvm_pcd);
+    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
 
@@ -587,16 +553,9 @@ int main(int argc, char **argv) {
 
     visualize_rgb_points(curr_pcd);
 
-    // filter to sparse point 
-    // pcl::PointCloud<pcl::PointXYZRGB>::Ptr sparse_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
-    // pcl::copyPointCloud(*curr_pcd, *sparse_pcd);
-    // filter_to_sparse_pcd(sparse_pcd, j_config);
-    // visualize_rgb_points(sparse_pcd);
-
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
-    // set_centers_to_closest_sparse_point(cluster_centers, nvm_pcd);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
