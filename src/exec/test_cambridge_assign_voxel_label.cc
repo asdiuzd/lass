@@ -421,6 +421,91 @@ void dump_parameters(const std::vector<Cluster> &cluster_centers,
     LOG(INFO) << "finished output json" << endl;
 }
 
+inline void adjust_cluster_centers_via_visibility(const std::string &data_base_dir, const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, std::vector<Cluster> &cluster_centers) {
+    camera_intrinsics K;
+    float rendered_depth_resize_ratio = 2.25;
+    K.cx = 852 / 2;
+    K.cy = 480 / 2;
+    K.width = 852;
+    K.height = 480;
+
+    std::vector<int> center_counter(cluster_centers.size(), 0);
+    std::vector<Eigen::Vector3f> center_sum(cluster_centers.size(), Eigen::Vector3f::Zero());
+
+    cv::Vec3b color;
+    pcl::PointXYZL pt;
+    // we assume that rendered_depth store in depth_noseg folder
+
+    pcl::KdTreeFLANN<pcl::PointXYZL> kdtree;
+    kdtree.setInputCloud(labeled_pcd);
+    std::vector<int> point_indices(1);
+    std::vector<float> distances(1);
+
+    for (int idx_pose = 0; idx_pose < poses_twc.size(); ++idx_pose) {
+        const auto &p = poses_twc[idx_pose];
+        // set focal
+        float focal = p.focal;
+        focal /= rendered_depth_resize_ratio;
+        K.fx = focal;
+        K.fy = focal;
+        std::string depth_filename = p.filename;
+        depth_filename.replace(depth_filename.find("/"), 1, "_");
+        depth_filename = depth_filename.substr(0, depth_filename.length() - 3) + "depth.tiff";
+        cv::Mat depth = cv::imread(data_base_dir + "/depth_noseg/" + depth_filename, cv::IMREAD_ANYDEPTH);
+        for (int j = 0; j < K.height; j++) {
+            for (int i = 0; i < K.width; i++) {
+                Eigen::Vector3f pt_cam = {float(i - K.cx) / K.fx, float(j - K.cy) / K.fy, 1};
+                float d = depth.at<float>(j, i) * 1.0e-3;
+                if (std::abs(d) < 1e-7) continue;
+                pt_cam *= d;
+                Eigen::Vector3f pt_w = p.q * pt_cam + p.p;
+                pt.x = pt_w.x();
+                pt.y = pt_w.y();
+                pt.z = pt_w.z();
+                if (kdtree.nearestKSearch(pt, 1, point_indices, distances) > 0) {
+                    int label = labeled_pcd->points[point_indices[0]].label;
+                    pt.label = label;
+                    center_counter[label]++;
+                    center_sum[label] += pt_w;
+                }
+            }
+        }
+        fprintf(stdout, "\r%d / %zu", idx_pose, poses_twc.size());
+        fflush(stdout);
+    }
+    // assign new centers
+    for (int i = 0; i < center_sum.size(); ++i) {
+        if (center_counter[i] > 0) {
+            cluster_centers[i].center = center_sum[i] / center_counter[i];
+        }
+    }
+    // remove unused centers
+    std::map<int, int> label_map_old_to_new;
+    std::vector<Cluster> new_cluster_centers;
+    for (int i = 0; i < cluster_centers.size(); ++i) {
+        if (center_counter[i] > 0) {
+            new_cluster_centers.push_back(cluster_centers[i]);
+            label_map_old_to_new[i] = int(new_cluster_centers.size() - 1);
+        }
+    }
+    new_cluster_centers.swap(cluster_centers);
+    // filter out unused centers
+    pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    for (int i = 0; i < labeled_pcd->points.size(); ++i) {
+        auto &old_label = labeled_pcd->points[i].label;
+        if (label_map_old_to_new.count(old_label) == 0) {
+            outliers->indices.push_back(i);
+        } else {
+            old_label = label_map_old_to_new[old_label];
+        }
+    }
+    pcl::ExtractIndices<pcl::PointXYZL> extract;
+    extract.setInputCloud(labeled_pcd);
+    extract.setIndices(outliers);
+    extract.setNegative(true);
+    extract.filter(*labeled_pcd);
+}
+
 inline void assign_voxel_label_to_rendered_depth(const std::string &data_base_dir, const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd) {
     // create folders
     for (int i = 1; i < 25; ++i) {
@@ -435,8 +520,6 @@ inline void assign_voxel_label_to_rendered_depth(const std::string &data_base_di
     K.cy = 480 / 2;
     K.width = 852;
     K.height = 480;
-
-    pcl::PointCloud<pcl::PointXYZL>::Ptr vis_pcd(new pcl::PointCloud<pcl::PointXYZL>);
 
     cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
     cv::Vec3b color;
@@ -459,7 +542,7 @@ inline void assign_voxel_label_to_rendered_depth(const std::string &data_base_di
         std::string depth_filename = p.filename;
         depth_filename.replace(depth_filename.find("/"), 1, "_");
         depth_filename = depth_filename.substr(0, depth_filename.length() - 3) + "depth.tiff";
-        print_var(data_base_dir + "/depth_noseg/" + depth_filename);
+        // print_var(data_base_dir + "/depth_noseg/" + depth_filename);
         cv::Mat depth = cv::imread(data_base_dir + "/depth_noseg/" + depth_filename, cv::IMREAD_ANYDEPTH);
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
@@ -474,7 +557,6 @@ inline void assign_voxel_label_to_rendered_depth(const std::string &data_base_di
                 if (kdtree.nearestKSearch(pt, 1, point_indices, distances) > 0) {
                     uint32_t label = labeled_pcd->points[point_indices[0]].label;
                     pt.label = label;
-                    vis_pcd->points.push_back(pt);
                     print_var(label);
                     auto &c = save_img.at<cv::Vec3b>(j, i);
                     if (pt.label == 0) {
@@ -525,6 +607,7 @@ int main(int argc, char **argv) {
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
+    adjust_cluster_centers_via_visibility(data_base_dir, poses_twc_train, labeled_pcd, cluster_centers);
     visualize_labeled_points(labeled_pcd, &cluster_centers);
 
     // TODO(ybbbbt): assign center via statistics, reduce label which has not been seen
