@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <experimental/filesystem>
 #include <pcl/io/ply_io.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
+#include "mesh_sampling.h"
 
 #include "json.h"
 #include "utils.h"
@@ -99,7 +101,7 @@ void process_path(fs::path& fn, const string& target_path, string& output_fn) {
     output_fn = target_fn.string();
 }
 
-void processing(shared_ptr<MapManager>& mm) {
+void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, float seed_resolution = 0.4) {
     mm->m_index_of_landmark = PointIndices::Ptr{new PointIndices};
     mm->m_index_of_landmark->indices.resize(mm->m_pcd->points.size());
     for (int idx = 0; idx < mm->m_pcd->points.size(); idx++) {
@@ -108,7 +110,7 @@ void processing(shared_ptr<MapManager>& mm) {
     mm->update_view();
     mm->show_point_cloud();
 
-    mm->supervoxel_landmark_clustering(0.015, 0.4, 1.0, 0.0, 0.0);
+    mm->supervoxel_landmark_clustering(voxel_resolution, seed_resolution, 1.0, 0.0, 0.1);
     // mm->set_view_target_pcd(true);
     // mm->update_view();
     // mm->show_point_cloud();
@@ -168,6 +170,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     const int scale = 1;
     const int width = 640 / scale, height = 480 / scale;
     // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    // float rgb_focal = 525;
     float rgb_focal = 520;
     const float fx = rgb_focal / scale, fy = rgb_focal / scale;
     const float cx = 320 / scale, cy = 240 / scale;
@@ -220,6 +223,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
+        // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.006880049706, -0.00333539999278, -0.0223485151692);
         e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
@@ -236,12 +240,108 @@ void test_raycasting_7scenes(int argc, char** argv) {
             }
         }
 
+        string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
+        cout << rgb_img_fn << endl;
+        auto rgb_img = cv::imread(rgb_img_fn);
         // cv::imwrite(image_fn, save_img);
-        // cv::imshow("show", save_img);
+        rgb_img = rgb_img / 2 + save_img / 2;
+        cv::imshow("show", save_img);
+        cv::imshow("rgb", rgb_img);
         // cv::imwrite("show.png", save_img);
-        cv::imwrite(image_fn, save_img);
-        // cv::waitKey(0);
+        // cv::imwrite(image_fn, save_img);
+        cv::waitKey(0);
     }
+}
+
+void test_normalize_rotations(int argc, char ** argv) {
+    /*
+        argv[1] - json fn
+     */
+    json j_input;
+    const char * json_fn = argv[1];
+    CHECK(fs::exists(json_fn)) << "json does not exist: " << json_fn << endl;
+    ifstream j_in(json_fn);
+    j_in >> j_input;
+
+    const string ply_path = j_input["model"].get<string>();
+    const string base_path = j_input["base_path"].get<string>();
+    const string scene = j_input["scene"].get<string>();
+    string target_path = (fs::path(j_input["target_path"].get<string>()) / scene).string();
+    const string parameters_output_fn = fs::path(target_path) / j_input["parameters_fn"].get<string>();
+    json j_output;
+    // const char * target_path = target_path_str.c_str();
+
+    CHECK(fs::exists(ply_path)) << "model does not exist: " << ply_path << endl;
+    CHECK(fs::exists(base_path)) << "path does not exist: " << base_path << endl;
+    if (!fs::exists(target_path)) {
+        // fs::create_directory(target_path);
+        string cmd = "mkdir -p " + target_path;
+        if (system(cmd.c_str()) == -1) {
+            cout << "failed to create " << cmd << endl;
+            return;
+        }
+    }
+    CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
+
+    normalize_7scenes_poses(base_path, scene);
+}
+
+void test_ply(int argc, char** argv) {
+    /*
+        argv[1] - json fn
+     */
+    json j_input;
+    const char * json_fn = argv[1];
+    CHECK(fs::exists(json_fn)) << "json does not exist: " << json_fn << endl;
+    ifstream j_in(json_fn);
+    j_in >> j_input;
+
+    const string ply_path = j_input["model"].get<string>();
+    const string base_path = j_input["base_path"].get<string>();
+    const string scene = j_input["scene"].get<string>();
+    string target_path = (fs::path(j_input["target_path"].get<string>()) / scene).string();
+    const string parameters_output_fn = fs::path(target_path) / j_input["parameters_fn"].get<string>();
+    const float voxel_resolution = j_input["voxel_resolution"].get<float>();
+    const float seed_resolution = j_input["seed_resolution"].get<float>();
+    json j_output;
+    // const char * target_path = target_path_str.c_str();
+
+    CHECK(fs::exists(ply_path)) << "model does not exist: " << ply_path << endl;
+    CHECK(fs::exists(base_path)) << "path does not exist: " << base_path << endl;
+    if (!fs::exists(target_path)) {
+        // fs::create_directory(target_path);
+        string cmd = "mkdir -p " + target_path;
+        if (system(cmd.c_str()) == -1) {
+            cout << "failed to create " << cmd << endl;
+            return;
+        }
+    }
+    CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
+
+    PolygonMesh mesh;
+    io::loadPLYFile(ply_path, mesh);
+
+    const int sample_number = 10000000;
+
+    vtkSmartPointer<vtkPolyData> vtkmesh;
+    VTKUtils::convertToVTK(mesh, vtkmesh);
+    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
+    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
+
+    auto mm = make_shared<MapManager>();
+    mm->m_pcd->points.resize(sample_number);
+    for (auto idx = 0; idx < sample_number; idx++) {
+        auto& pt1 = mm->m_pcd->points[idx];
+        auto& pt2 = cloud->points[idx];
+        pt1.x = pt2.x;
+        pt1.y = pt2.y;
+        pt1.z = pt2.z;
+        pt1.r = pt2.r;
+        pt1.g = pt2.g;
+        pt1.b = pt2.b;
+    }
+
+    processing(mm, voxel_resolution, seed_resolution);
 }
 
 int main(int argc, char** argv) {
@@ -250,5 +350,7 @@ int main(int argc, char** argv) {
         argv[2] -- mhd file
      */
 
-    test_raycasting_7scenes(argc, argv);
+    // test_raycasting_7scenes(argc, argv);
+    test_ply(argc, argv);
+    // test_normalize_rotations(argc, argv);
 }

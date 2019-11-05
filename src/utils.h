@@ -64,6 +64,7 @@ bool load_mhd_file(const char *fn, mhd_structure& data);
 // read nvm from file ifn and write pcd to file ofn
 bool load_sequences(const char *fn, std::vector<std::string>& seqs);
 bool load_7scenes_poses(const std::string base_path, const std::string scene, std::vector<Eigen::Matrix4f>& es, std::vector<std::string>& fns, std::vector<std::string>& relative_fns);
+bool normalize_7scenes_poses(const std::string base_path, const std::string scene);
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize=false);
 // transfer nvm to pcd
