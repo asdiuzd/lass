@@ -1,0 +1,12 @@
+{
+    "ply" : "fused.ply",
+    "downsample_ratio": 0.5,
+    "statical_filter": {
+        "mean_K" : 25.0,
+        "stddev" : 2.0
+    },
+    "supervoxel" : {
+        "voxel_resolution" : 0.1,
+        "seed_resolution" : 2.0
+    }
+}

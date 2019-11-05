@@ -33,3 +33,9 @@ target_link_libraries(test_cambridge_landmark lass)
 
 add_executable(evaluate_pose evaluate_pose.cc)
 target_link_libraries(evaluate_pose)
+
+add_executable(cluster_reprojection_check cluster_reprojection_check.cc)
+target_link_libraries(cluster_reprojection_check)
+
+add_executable(test_cambridge_assign_voxel_label test_cambridge_assign_voxel_label.cc)
+target_link_libraries(test_cambridge_assign_voxel_label lass)
