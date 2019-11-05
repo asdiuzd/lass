@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-seq_name='OldHospital'
-# seq_name='KingsCollege'
+# seq_name='OldHospital'
+seq_name='KingsCollege'
 # seq_name='ShopFacade'
+if [ $# -eq 1 ]
+  then
+    seq_name=$1
+fi
 dataset_base_dir=~/Data/cambridge/
 
 cd ../bin

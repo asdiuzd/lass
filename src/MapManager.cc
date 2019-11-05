@@ -329,7 +329,7 @@ void MapManager::prepare_octree_for_target_pcd(float resolution) {
 }
 
 // extrinsics: world to camera
-void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type) {
+void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type, pcl::PointCloud<pcl::PointXYZL>::Ptr *pcd_visible) {
     // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
@@ -393,6 +393,9 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                         cluster_center.y - origin[1],
                         cluster_center.z - origin[2]
                     );
+                }
+                if (pcd_visible) {
+                    (*pcd_visible)->points.push_back(raycast_pcd->points[idx]);
                 }
             } else {
                 pt.label = 0;
