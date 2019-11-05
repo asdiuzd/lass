@@ -58,7 +58,7 @@ bool load_list_file(const char *fn, int n_cameras, std::vector<std::string>& ima
     pidx        - the index of 3D points, pidx[i], that 2D measurements, measurements[i], belong to.   
     cidx        - the index of cameras, cidx[i], that 2D measurements, measurements[i], belong to.
  */
-bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<std::string> names, std::vector<int>& ptc);
+bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<std::string> &names, std::vector<int>& ptc);
 
 bool load_mhd_file(const char *fn, mhd_structure& data);
 // read nvm from file ifn and write pcd to file ofn

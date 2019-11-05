@@ -56,6 +56,9 @@ bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
                 r[3], r[4], r[5], t[1],
                 r[6], r[7], r[8], t[2],
                 0, 0, 0, 1;
+        Eigen::Quaternionf q(e.block<3, 3>(0, 0));
+        q.normalize();
+        e.block<3, 3>(0, 0) = q.matrix();
     }
     return true;
 }
@@ -94,7 +97,7 @@ bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, ve
 
 
 bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx,
-    std::vector<int>& cidx, std::vector<std::string> names, std::vector<int>& ptc
+    std::vector<int>& cidx, std::vector<std::string> &names, std::vector<int>& ptc
 ) {
     ifstream in(fn);
     int rotation_parameter_num = 4;

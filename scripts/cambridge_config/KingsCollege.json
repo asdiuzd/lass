@@ -1,6 +1,6 @@
 {
     "ply" : "fused_clear.ply",
-    "downsample_ratio": 0.5,
+    "downsample_ratio": 0.3,
     "statical_filter": {
         "mean_K" : 25.0,
         "stddev" : 2.0
