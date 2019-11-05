@@ -524,7 +524,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points_from_supervoxe
         pt.y = label_pt.y;
         pt.z = label_pt.z;
 
-        GroundColorMix(pt.b, pt.g, pt.r, normalize_value(label_pt.label, 0, max_target_label));
+        // GroundColorMix(pt.b, pt.g, pt.r, normalize_value(label_pt.label, 0, max_target_label));
+        hash_colormap(pt.r, pt.g, pt.b, label_pt.label);
 
         extracted_pcd->points.emplace_back(pt);
     }
