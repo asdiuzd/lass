@@ -441,8 +441,13 @@ inline void adjust_cluster_centers_via_visibility(const std::string &data_base_d
     std::vector<int> point_indices(1);
     std::vector<float> distances(1);
 
-    for (int idx_pose = 0; idx_pose < poses_twc.size(); ++idx_pose) {
-        const auto &p = poses_twc[idx_pose];
+    pcl::PointCloud<pcl::PointXYZL>::Ptr rendered_pcd(new pcl::PointCloud<pcl::PointXYZL>);
+    auto sampled_poses = poses_twc;
+    auto rng = std::default_random_engine {};
+    std::shuffle(std::begin(sampled_poses), std::end(sampled_poses), rng);
+    sampled_poses.resize(10);
+    for (int idx_pose = 0; idx_pose < sampled_poses.size(); ++idx_pose) {
+        const auto &p = sampled_poses[idx_pose];
         // set focal
         float focal = p.focal;
         focal /= rendered_depth_resize_ratio;
@@ -462,17 +467,19 @@ inline void adjust_cluster_centers_via_visibility(const std::string &data_base_d
                 pt.x = pt_w.x();
                 pt.y = pt_w.y();
                 pt.z = pt_w.z();
-                if (kdtree.nearestKSearch(pt, 1, point_indices, distances) > 0) {
-                    int label = labeled_pcd->points[point_indices[0]].label;
-                    pt.label = label;
-                    center_counter[label]++;
-                    center_sum[label] += pt_w;
-                }
+                rendered_pcd->points.push_back(pt);
+                // if (kdtree.nearestKSearch(pt, 1, point_indices, distances) > 0) {
+                //     int label = labeled_pcd->points[point_indices[0]].label;
+                //     pt.label = label;
+                //     center_counter[label]++;
+                //     center_sum[label] += pt_w;
+                // }
             }
         }
         fprintf(stdout, "\r%d / %zu", idx_pose, poses_twc.size());
         fflush(stdout);
     }
+    visualize_labeled_points(rendered_pcd);
     // assign new centers
     for (int i = 0; i < center_sum.size(); ++i) {
         if (center_counter[i] > 0) {
