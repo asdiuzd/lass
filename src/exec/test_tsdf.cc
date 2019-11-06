@@ -20,8 +20,23 @@
 using namespace std;
 using namespace lass;
 using namespace pcl;
+using namespace cv;
 namespace fs = std::experimental::filesystem;
 using json = nlohmann::json;
+
+// void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<)
+void generate_a_center(PointCloud<PointXYZ>::Ptr& pts, PointXYZ& center) {
+    const int number = pts->points.size();
+    center.x = center.y = center.z = 0;
+    for (auto& pt: pts->points) {
+        center.x += pt.x;
+        center.y += pt.y;
+        center.z += pt.z;
+    }
+    center.x /= number;
+    center.y /= number;
+    center.z /= number;
+}
 
 void generate_centers(json& j, shared_ptr<MapManager>& mm) {
     vector<PointXYZRGB>    centers{static_cast<unsigned long>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
@@ -318,30 +333,109 @@ void test_ply(int argc, char** argv) {
     }
     CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
 
+    const int scale = 1;
+    const int width = 640 / scale, height = 480 / scale;
+    // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    // float rgb_focal = 525;
+    float rgb_focal = 520;
+    const float fx = rgb_focal / scale, fy = rgb_focal / scale;
+    const float cx = 320 / scale, cy = 240 / scale;
+    const camera_intrinsics intrsinsics{
+        .cx = cx, .cy = cy, .fx = fx, .fy = fy, .width = width, .height = height
+    };
+
+    vector<Eigen::Matrix4f> es;
+    vector<string> fns, relative_fns;
+
+    // load camera poses and file names
+    load_7scenes_poses(base_path, scene, es, fns, relative_fns);
     PolygonMesh mesh;
     io::loadPLYFile(ply_path, mesh);
 
     const int sample_number = 10000000;
 
-    vtkSmartPointer<vtkPolyData> vtkmesh;
-    VTKUtils::convertToVTK(mesh, vtkmesh);
-    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
-    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
-
     auto mm = make_shared<MapManager>();
-    mm->m_pcd->points.resize(sample_number);
-    for (auto idx = 0; idx < sample_number; idx++) {
-        auto& pt1 = mm->m_pcd->points[idx];
-        auto& pt2 = cloud->points[idx];
-        pt1.x = pt2.x;
-        pt1.y = pt2.y;
-        pt1.z = pt2.z;
-        pt1.r = pt2.r;
-        pt1.g = pt2.g;
-        pt1.b = pt2.b;
+    mm->load_and_sample_ply(ply_path, sample_number);
+    processing(mm, voxel_resolution, seed_resolution);
+
+    mm->prepare_octree_for_target_pcd(0.02);
+
+    // generate json
+    // generate_centers(j_output["centers"], mm);
+    generate_es(j_output["camera_poses"], relative_fns, es);
+    ofstream jout(parameters_output_fn);
+    jout << j_output.dump(4);
+
+    // visualize_centers(j_output, mm);
+
+    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
+    cv::Mat save_img(cv::Size(width, height), CV_8UC3);
+    vector<string> image_fns;
+
+    vector<int>    label_mapping(mm->max_target_label);
+    for (int idx = 0; idx < mm->max_target_label; idx++) {
+        label_mapping[idx] = idx;
+    }
+    shuffle(label_mapping.begin(), label_mapping.end(), default_random_engine(0));
+
+    for (int idx = 0; idx < es.size(); idx++) {
+        Eigen::Matrix4f e = es[idx];
+        fs::path fn = fns[idx];
+        string image_fn;
+        process_path(fn, target_path, image_fn);
+        cout << fn << endl;
+        cout << target_path << endl;
+        cout << image_fn << endl;
+
+        // ybbbbt: dirty fix for new interface
+        mm->m_labeled_pcd = mm->m_target_pcd;
+        // fix 7 scenes gt
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
+        mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
+
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                auto& pt = pcd->points[j * width + i];
+                auto& c = save_img.at<cv::Vec3b>(j, i);
+                auto label = label_mapping[pt.label];
+                if (pt.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                }
+            }
+        }
+
+        string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
+        cout << rgb_img_fn << endl;
+        auto rgb_img = cv::imread(rgb_img_fn);
+        // cv::imwrite(image_fn, save_img);
+        rgb_img = rgb_img / 2 + save_img / 2;
+        cv::imshow("show", save_img);
+        cv::imshow("rgb", rgb_img);
+        // cv::imwrite("show.png", save_img);
+        // cv::imwrite(image_fn, save_img);
+        cv::waitKey(0);
     }
 
-    processing(mm, voxel_resolution, seed_resolution);
+}
+
+void test_rendered_depth() {
+    char *fn = "seq-01-frame-000000.normpose.bin";
+    PointCloud<PointXYZ>::Ptr pts(new PointCloud<PointXYZ>);
+
+    load_bin_file(fn, pts);
+    visualize_pcd(pts);
+
+    Mat img(cv::Size(640, 480), CV_32FC1);
+    for (int row = 0; row < 480; row++) {
+        for (int col = 0; col < 640; col++) {
+            int idx = (480 - row) * 640 + col;
+            img.at<float>(row, col) = -pts->points[idx].z / 6;
+        }
+    }
+    imshow("img", img);
+    waitKey(0);
 }
 
 int main(int argc, char** argv) {
@@ -353,4 +447,5 @@ int main(int argc, char** argv) {
     // test_raycasting_7scenes(argc, argv);
     test_ply(argc, argv);
     // test_normalize_rotations(argc, argv);
+    // test_rendered_depth();
 }

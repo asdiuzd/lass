@@ -12,6 +12,8 @@
 #include <thread>
 #include <chrono>
 #include <opencv2/opencv.hpp>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
+#include "mesh_sampling.h"
 
 #include "utils.h"
 #include "MapManager.h"
@@ -175,6 +177,28 @@ void MapManager::load_pcd_pcl(const std::string& fn) {
 
 void MapManager::load_ply_pcl(const std::string& fn) {
     CHECK(io::loadPLYFile(fn.c_str(), *m_pcd) >= 0) << "can not load: " << fn << endl;
+}
+
+void MapManager::load_and_sample_ply(const std::string& fn, const int sample_number) {
+    PolygonMesh mesh;
+    CHECK(io::loadPLYFile(fn.c_str(), mesh) >= 0) << "can not load: " << fn << endl;
+
+    vtkSmartPointer<vtkPolyData> vtkmesh;
+    VTKUtils::convertToVTK(mesh, vtkmesh);
+    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
+    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
+
+    this->m_pcd->points.resize(sample_number);
+    for (auto idx = 0; idx < sample_number; idx++) {
+        auto& pt1 = this->m_pcd->points[idx];
+        auto& pt2 = cloud->points[idx];
+        pt1.x = pt2.x;
+        pt1.y = pt2.y;
+        pt1.z = pt2.z;
+        pt1.r = pt2.r;
+        pt1.g = pt2.g;
+        pt1.b = pt2.b;
+    }
 }
 
 void MapManager::export_to_pcd(const std::string& fn) {
