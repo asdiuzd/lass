@@ -23,7 +23,7 @@ using json = nlohmann::json;
 
 namespace {
 bool g_stop_view = false;
-bool g_disbale_viewer = true;
+bool g_disbale_viewer = false;
 
 const int resize_ratio = 2;
 
@@ -40,15 +40,11 @@ struct Cluster {
     Cluster() {
         center.setZero();
         center_orig.setZero();
-        bbox_min = {std::numeric_limits<float>::max(),
-                    std::numeric_limits<float>::max(),
-                    std::numeric_limits<float>::max()};
-        bbox_max = -bbox_min;
+        max_visible_pixel = 0;
     }
     Eigen::Vector3f center;
     Eigen::Vector3f center_orig;
-    Eigen::Vector3f bbox_min;
-    Eigen::Vector3f bbox_max;
+    int max_visible_pixel;
 };
 
 std::vector<Eigen::Matrix4f> g_Twcs;
@@ -160,8 +156,8 @@ inline void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud,
 }
 
 inline void visualize_label_points_from_rgb(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud,
-                                     const std::vector<pcl::PointIndices> &cluster,
-                                     const std::vector<int> &cluster_labels) {
+                                            const std::vector<pcl::PointIndices> &cluster,
+                                            const std::vector<int> &cluster_labels) {
     if (g_disbale_viewer) return;
     // assign to PointXYZL
     int outlier_clusters = 0;
@@ -257,12 +253,6 @@ inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr p
     for (const auto &p : pcd->points) {
         auto &c = centers[p.label];
         c.center += Eigen::Vector3f(p.x, p.y, p.z);
-        c.bbox_min.x() = std::min(c.bbox_min.x(), p.x);
-        c.bbox_min.y() = std::min(c.bbox_min.y(), p.y);
-        c.bbox_min.z() = std::min(c.bbox_min.z(), p.z);
-        c.bbox_max.x() = std::max(c.bbox_max.x(), p.x);
-        c.bbox_max.y() = std::max(c.bbox_max.y(), p.y);
-        c.bbox_max.z() = std::max(c.bbox_max.z(), p.z);
         centers_counter[p.label]++;
     }
     for (int i = 0; i < centers.size(); ++i) {
@@ -398,9 +388,9 @@ inline void filter_to_sparse_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, 
 }
 
 inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
-                     const std::vector<PoseData> &train_poses_twc,
-                     const std::vector<PoseData> &test_poses_twc,
-                     const std::vector<PoseData> &all_poses_twc) {
+                            const std::vector<PoseData> &train_poses_twc,
+                            const std::vector<PoseData> &test_poses_twc,
+                            const std::vector<PoseData> &all_poses_twc) {
     const auto &centers = cluster_centers;
     json j_centers;
     j_centers.push_back(
@@ -465,22 +455,13 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     mm->m_labeled_pcd = labeled_pcd;
     mm->prepare_octree_for_target_pcd(0.3);
 
-    // convert to pcl type cluster center
-    std::vector<pcl::PointXYZRGB> pcl_centers;
-    for (const auto &c : cluster_centers) {
-        pcl::PointXYZRGB pt;
-        pt.x = c.center.x();
-        pt.y = c.center.y();
-        pt.z = c.center.z();
-        pcl_centers.emplace_back(pt);
-    }
+    std::vector<pcl::PointXYZRGB> empty_centers;
 
     std::vector<int> center_counter(cluster_centers.size(), 0);
     std::vector<Eigen::Vector3f> center_sum(cluster_centers.size(), Eigen::Vector3f::Zero());
 
-    for (int i = 0; i < poses_twc.size(); ++i) {
-        const auto &p = poses_twc[i];
-        PointCloud<PointXYZL>::Ptr visible_pcd{new PointCloud<PointXYZL>};
+    for (int idx_pose = 0; idx_pose < poses_twc.size(); ++idx_pose) {
+        const auto &p = poses_twc[idx_pose];
         // set focal
         float focal = p.focal;
         focal /= resize_ratio_visibility;
@@ -490,23 +471,46 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
         Tcw.setIdentity();
         Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
-        mm->raycasting_pcd(Tcw, K, image_pcd, pcl_centers, false, 3, 1.0, "labeled", &visible_pcd);
-
-        for (int j = 0; j < visible_pcd->points.size(); ++j) {
-            int label = visible_pcd->points[j].label;
-            center_counter[label]++;
-            const auto &p = visible_pcd->points[j];
-            center_sum[label] += Eigen::Vector3f(p.x, p.y, p.z);
+        PointCloud<PointXYZL>::Ptr visible_pcd{new PointCloud<PointXYZL>};
+        mm->raycasting_pcd(Tcw, K, image_pcd, empty_centers, false, 3, 1.0, "labeled", &visible_pcd);
+        //
+        std::vector<int> cluster_visible_count(cluster_centers.size(), 0);
+        std::vector<Eigen::Vector2i> cluster_pixel_location_sum(cluster_centers.size(), Eigen::Vector2i::Zero());
+        for (int j = 0; j < K.height; j++) {
+            for (int i = 0; i < K.width; i++) {
+                auto &pt = image_pcd->points[j * K.width + i];
+                if (pt.label == 0) continue;
+                cluster_visible_count[pt.label]++;
+                cluster_pixel_location_sum[pt.label] += Eigen::Vector2i(i, j);
+            }
+        }
+        for (int i = 0; i < cluster_centers.size(); ++i) {
+            auto &cluster = cluster_centers[i];
+            if (cluster_visible_count[i] > cluster.max_visible_pixel) {
+                Eigen::Vector2i center_2d = cluster_pixel_location_sum[i] / cluster_visible_count[i];
+                // use mean depth from a small region
+                int region_size = 3;
+                int x_begin = std::max(0, center_2d.x() - region_size);
+                int x_end = std::min(K.width - 1, center_2d.x() + region_size);
+                int y_begin = std::max(0, center_2d.y() - region_size);
+                int y_end = std::min(K.height - 1, center_2d.y() + region_size);
+                float count = 0;
+                Eigen::Vector3f pt_sum;
+                pt_sum.setZero();
+                for (int x = x_begin; x < x_end; ++x) {
+                    for (int y = y_begin; y < y_end; ++y) {
+                        auto &p = visible_pcd->points[y * K.width + x];
+                        if (p.label != i) continue;  // skip point which does not belong to current label
+                        pt_sum += Eigen::Vector3f(p.x, p.y, p.z);
+                        count++;
+                    }
+                }
+                if (count > 0) cluster_centers[i].center = pt_sum / count;
+            }
         }
 
-        fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
+        fprintf(stdout, "\r%d / %zu", idx_pose, poses_twc.size());
         fflush(stdout);
-    }
-    // assign new centers
-    for (int i = 0; i < center_sum.size(); ++i) {
-        if (center_counter[i] > 0) {
-            cluster_centers[i].center = center_sum[i] / center_counter[i];
-        }
     }
 }
 

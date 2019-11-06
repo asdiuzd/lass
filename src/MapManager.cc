@@ -340,7 +340,10 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
     const int &width = intrinsics.width, &height = intrinsics.height;
     const float &fx = intrinsics.fx, &fy = intrinsics.fy, &cx = intrinsics.cx, &cy = intrinsics.cy;
     const int pixel_number = width * height;
-    pcd->points.resize(width * height) ;
+    pcd->points.resize(width * height);
+    if (pcd_visible) {
+        (*pcd_visible)->points.resize(width * height);
+    }
 
     Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).transpose() * extrinsics.block(0, 3, 3, 1);
     vector<vector<Eigen::Vector3f>> directions(width, vector<Eigen::Vector3f>(height));
@@ -395,7 +398,7 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                     );
                 }
                 if (pcd_visible) {
-                    (*pcd_visible)->points.push_back(raycast_pcd->points[idx]);
+                    (*pcd_visible)->points[v * width + u] = raycast_pcd->points[idx];
                 }
             } else {
                 pt.label = 0;
