@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <chrono>
+#include <random>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -114,6 +115,13 @@ inline void hash_colormap(uchar &r, uchar &g, uchar &b, size_t label) {
     r = uchar(h & 0xFF);
     g = uchar((h >> 4) & 0xFF);
     b = uchar((h >> 8) & 0xFF);
+}
+
+inline float rand01() {
+    static std::random_device dev;
+    static std::mt19937 rng(dev());
+    static std::uniform_real_distribution<float> rand01_d(0, 1);
+    return rand01_d(rng);
 }
 
 void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);

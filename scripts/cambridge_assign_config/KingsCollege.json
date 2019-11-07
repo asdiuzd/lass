@@ -1,0 +1,11 @@
+{
+    "downsample_ratio": 1.0,
+    "statical_filter": {
+        "mean_K" : 25.0,
+        "stddev" : 2.0
+    },
+    "supervoxel" : {
+        "voxel_resolution" : 0.25,
+        "seed_resolution" : 2.0
+    }
+}
