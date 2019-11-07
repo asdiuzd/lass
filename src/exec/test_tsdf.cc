@@ -208,8 +208,8 @@ void test_raycasting_7scenes(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
-        // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.006880049706, -0.00333539999278, -0.0223485151692);
-        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
+        // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.006880049706, -0.00333539999278, -0.0223485151692);
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
@@ -351,7 +351,7 @@ void test_ply(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
-        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
         update_candidate_list(pcd, scores, centers, width);
         for (int i = 0; i < width; i++) {
@@ -401,7 +401,7 @@ void test_ply(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
-        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
@@ -436,7 +436,10 @@ int main(int argc, char** argv) {
      */
 
     // test_raycasting_7scenes(argc, argv);
-    test_ply(argc, argv);
+    // test_ply(argc, argv);
     // test_normalize_rotations(argc, argv);
     // test_rendered_depth();
+    PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
+    load_and_sample_obj(argv[1], 40000000, pcd);
+    visualize_pcd(pcd);
 }

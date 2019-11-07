@@ -386,7 +386,7 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
         (*pcd_visible)->points.resize(width * height);
     }
 
-    Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).transpose() * extrinsics.block(0, 3, 3, 1);
+    Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).inverse() * extrinsics.block(0, 3, 3, 1);
     vector<vector<Eigen::Vector3f>> directions(width, vector<Eigen::Vector3f>(height));
     vector<double> depth(width * height, 999999);
 
@@ -406,7 +406,7 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
             auto &d = directions[u][v];
             vector<int> k_indices;
             Eigen::Vector3f dc((u - cx) / fx, (v - cy) / fy, 1);
-            d = extrinsics.block(0, 0, 3, 3).transpose() * dc + origin;
+            d = extrinsics.block(0, 0, 3, 3).inverse() * dc + origin;
 
             auto &pt = pcd->points[v * width + u];
             // pt.x = d(0);
