@@ -1,5 +1,5 @@
 {
-    "obj" : "ShopFacade.obj",
+    "obj" : "greatcourt.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 1.0,
     "statical_filter": {
@@ -7,7 +7,7 @@
         "stddev" : 2.0
     },
     "supervoxel" : {
-        "voxel_resolution" : 0.03,
-        "seed_resolution" : 2.0
+        "voxel_resolution" : 0.1,
+        "seed_resolution" : 4.0
     }
 }

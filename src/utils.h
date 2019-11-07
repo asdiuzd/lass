@@ -47,6 +47,7 @@ void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const std::string
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const std::string vn = std::string("simple"));
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud, const std::string vn = std::string("simple"));
 
+void load_and_sample_obj(const std::string& fn, const int sample_number, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pcd);
 // load camera poses
 bool load_info_file(const char *fn, std::vector<Eigen::Matrix4f>& es);
 

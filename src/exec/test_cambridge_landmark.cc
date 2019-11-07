@@ -266,40 +266,40 @@ inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr p
 inline void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<Cluster> &centers) {
     auto &curr_pcd = input_pcd;
     // uniform downsample
-    {
-        pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
-        float downsample_ratio = j_config["downsample_ratio"];
-        for (int i = 0; i < curr_pcd->points.size(); ++i) {
-            if (rand01() > downsample_ratio) outliers->indices.push_back(i);
-        }
-        pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-        extract.setInputCloud(curr_pcd);
-        extract.setIndices(outliers);
-        extract.setNegative(true);
-        extract.filter(*curr_pcd);
-    }
+    // {
+    //     pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    //     float downsample_ratio = j_config["downsample_ratio"];
+    //     for (int i = 0; i < curr_pcd->points.size(); ++i) {
+    //         if (rand01() > downsample_ratio) outliers->indices.push_back(i);
+    //     }
+    //     pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+    //     extract.setInputCloud(curr_pcd);
+    //     extract.setIndices(outliers);
+    //     extract.setNegative(true);
+    //     extract.filter(*curr_pcd);
+    // }
     // Statistical filtering outliers
-    {
-        const float meanK = j_config["statical_filter"]["mean_K"];
-        const float stddev = j_config["statical_filter"]["stddev"];
-        pcl::PointCloud<PointXYZRGB>::Ptr cloud = curr_pcd;
-        pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
+    // {
+    //     const float meanK = j_config["statical_filter"]["mean_K"];
+    //     const float stddev = j_config["statical_filter"]["stddev"];
+    //     pcl::PointCloud<PointXYZRGB>::Ptr cloud = curr_pcd;
+    //     pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
 
-        LOG(INFO) << "Statistical filtering outliers..." << std::endl;
-        LOG(INFO) << stddev << ", " << meanK << std::endl;
+    //     LOG(INFO) << "Statistical filtering outliers..." << std::endl;
+    //     LOG(INFO) << stddev << ", " << meanK << std::endl;
 
-        StatisticalOutlierRemoval<PointXYZRGB> sor;
-        sor.setInputCloud(cloud);
-        sor.setMeanK(meanK);
-        sor.setStddevMulThresh(stddev);
-        // sor.setNegative(false);
-        sor.filter(*cloud_filtered);
+    //     StatisticalOutlierRemoval<PointXYZRGB> sor;
+    //     sor.setInputCloud(cloud);
+    //     sor.setMeanK(meanK);
+    //     sor.setStddevMulThresh(stddev);
+    //     // sor.setNegative(false);
+    //     sor.filter(*cloud_filtered);
 
-        LOG(INFO) << "before filtering:\tpoint number = " << curr_pcd->points.size() << endl;
-        LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
-        LOG(INFO) << "filtered number = " << curr_pcd->points.size() - cloud_filtered->points.size() << endl;
-        curr_pcd = cloud_filtered;
-    }
+    //     LOG(INFO) << "before filtering:\tpoint number = " << curr_pcd->points.size() << endl;
+    //     LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
+    //     LOG(INFO) << "filtered number = " << curr_pcd->points.size() - cloud_filtered->points.size() << endl;
+    //     curr_pcd = cloud_filtered;
+    // }
 
     visualize_rgb_points(curr_pcd);
 
@@ -453,7 +453,8 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     auto mm = std::make_unique<MapManager>();
     mm->m_target_pcd = labeled_pcd;
     mm->m_labeled_pcd = labeled_pcd;
-    mm->prepare_octree_for_target_pcd(0.3);
+    // mm->prepare_octree_for_target_pcd(0.3);
+    mm->prepare_octree_for_target_pcd(0.1);
 
     std::vector<pcl::PointXYZRGB> empty_centers;
 
@@ -597,7 +598,8 @@ int main(int argc, char **argv) {
     // load data
     const std::string data_base_dir(argv[2]);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
+    // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
+    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 20000000, curr_pcd);
     std::map<std::string, float> focal_map;
     load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
@@ -615,7 +617,8 @@ int main(int argc, char **argv) {
     }
     g_Twcs = Twcs;
 
-    visualize_rgb_points(curr_pcd);
+    // visualize_rgb_points(curr_pcd);
+    visualize_pcd(curr_pcd);
 
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
     std::vector<Cluster> cluster_centers;

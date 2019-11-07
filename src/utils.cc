@@ -3,8 +3,11 @@
 #include<opencv2/opencv.hpp>
 #include<omp.h>
 #include<Eigen/Eigen>
+#include <pcl/io/ply_io.h>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
 #include "utils.h"
+#include "mesh_sampling.h"
 
 using namespace std;
 using namespace pcl;
@@ -199,6 +202,29 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
     cout << ncam << " cameras; " << npoint << " 3D points; " << nproj << " projections\n";
 
     return true;
+}
+
+void load_and_sample_obj(const std::string& fn, const int sample_number, pcl::PointCloud<pcl::PointXYZRGB>::Ptr& pcd) {
+    PolygonMesh mesh;
+    CHECK(io::loadPolygonFileOBJ(fn.c_str(), mesh) >= 0) << "can not load: " << fn << endl;
+
+    vtkSmartPointer<vtkPolyData> vtkmesh;
+    VTKUtils::convertToVTK(mesh, vtkmesh);
+    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
+    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
+
+    pcd->points.resize(sample_number);
+    for (auto idx = 0; idx < sample_number; idx++) {
+        auto& pt1 = pcd->points[idx];
+        auto& pt2 = cloud->points[idx];
+        pt1.x = pt2.x;
+        pt1.y = pt2.y;
+        pt1.z = pt2.z;
+        pt1.r = pt1.g = pt1.b = 220;
+        // pt1.r = pt2.r;
+        // pt1.g = pt2.g;
+        // pt1.b = pt2.b;
+    }
 }
 
 bool load_sequences(const char *fn, vector<string>& seqs) {

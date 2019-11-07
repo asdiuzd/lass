@@ -7,7 +7,8 @@ if [ $# -eq 1 ]
   then
     seq_name=$1
 fi
-dataset_base_dir=~/Data/cambridge/
+#dataset_base_dir=~/Data/cambridge/
+dataset_base_dir=~/Dataset/CambridgeLandmarks/
 
 cd ../bin
 
