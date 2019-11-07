@@ -25,6 +25,23 @@ void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const string vn
     while(!viewer.wasStopped()){}
 }
 
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const string vn) {
+    pcl::visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer);                                // viewer
+    // pcl::visualization::CloudViewer viewer(vn.c_str());
+    viewer->addPointCloud(cloud, "target_pcd");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
+    while(!viewer->wasStopped()){
+        viewer->spinOnce(100);
+    }
+}
+
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const string vn) {
+    pcl::visualization::CloudViewer viewer(vn.c_str());
+    viewer.showCloud(cloud);
+    while(!viewer.wasStopped()){}
+}
+
 bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
     ifstream ifs(fn, std::ios::in | std::ios::binary);
     if (!ifs) {
@@ -95,6 +112,22 @@ bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, ve
     }
 }
 
+bool load_bin_file(const char *fn, pcl::PointCloud<PointXYZ>::Ptr& pts) {
+    FILE* fp = fopen(fn, "rb");
+    char buffer[8];
+    int width, height;
+    int ret = fread(&width, 4, 1, fp);
+    ret = fread(&height, 4, 1, fp);
+    CHECK(width == 640) << width << endl;
+    CHECK(height == 480) << height << endl;
+
+    pts->points.resize(width * height);
+    for (auto& pt : pts->points) {
+        ret = fread(&pt.x, 4, 1, fp);
+        ret = fread(&pt.y, 4, 1, fp);
+        ret = fread(&pt.z, 4, 1, fp);
+    }
+}
 
 bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx,
     std::vector<int>& cidx, std::vector<std::string> &names, std::vector<int>& ptc
@@ -182,7 +215,7 @@ bool load_sequences(const char *fn, vector<string>& seqs) {
     }
 }
 
-bool load_7scenes_poses(const string base_path, const string scene, std::vector<Eigen::Matrix4f>& es, vector<string>& fns, std::vector<std::string>& relative_fns) {
+bool load_7scenes_poses(const string base_path, const string scene, std::vector<Eigen::Matrix4f>& es, vector<string>& fns, std::vector<std::string>& relative_fns, bool gettraining, bool gettest) {
     fs::path base_path_str{base_path};
     string scene_str(scene), trainingset("TrainSplit.txt"), testset("TestSplit.txt");
     int frame_number;
@@ -196,13 +229,21 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
     string test_fn = (base_path_str / scene_str / testset).string();
     vector<string> seqs;
 
-    load_sequences(training_fn.c_str(), seqs);
-    load_sequences(test_fn.c_str(), seqs);
+
+    if (gettraining) {
+        load_sequences(training_fn.c_str(), seqs);
+    }
+    if (gettest) {
+        load_sequences(test_fn.c_str(), seqs);
+    }
 
     /*
         The matrix stored in file is camera-to-world.
         We need world-to-camera.
     */
+    es.resize(0);
+    fns.resize(0);
+    relative_fns.resize(0);
     stringstream s;
     s.fill('0');
     fns.resize(0);
@@ -221,10 +262,13 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
                     in >> e(r, c);
                 }
             }
-            Eigen::Quaternionf q(e.block<3, 3>(0, 0));
-            q.normalize();
-            e.block(0, 0, 3, 3) = q.conjugate().toRotationMatrix();
-            e.block(0, 3, 3, 1) = - (q.conjugate() * e.block(0, 3, 3, 1));
+            // Eigen::Quaternionf q(e.block<3, 3>(0, 0));
+            // q.normalize();
+            // e.block(0, 0, 3, 3) = q.conjugate().toRotationMatrix();
+            // e.block(0, 3, 3, 1) = - (q.conjugate() * e.block(0, 3, 3, 1));
+            e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).inverse();
+            // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).transpose();
+            e.block(0, 3, 3, 1) = - (e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
             es.emplace_back(e);
         }
     }
@@ -862,4 +906,50 @@ void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisu
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "camera_points");
 }
 
+void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<float>& scores, vector<PointXYZL>& centers, int width) {
+    const int pt_number = pcd->points.size(), label_size = centers.size();
+    vector<int> startrow(label_size, 10000), startcol(label_size, 10000), endrow(label_size, 0), endcol(label_size, 0);
+    vector<bool> visited(label_size, false);
+
+    for (int idx = 0; idx < pt_number; idx++) {
+        auto& label = pcd->points[idx].label;
+        visited[label] = true;
+
+        int row = idx / width, col = idx % width;
+        startrow[label] = std::min(startrow[label], row);
+        startcol[label] = std::min(startcol[label], col);
+        endrow[label] = std::max(endrow[label], row);
+        endcol[label] = std::max(endcol[label], col);
+
+    }
+    for (int idx = 1; idx < label_size; idx++) {
+        if (!visited[idx]) {
+            continue;
+        }
+        float score = (endcol[idx] - startcol[idx]) * (endrow[idx] - startrow[idx]);
+
+        if (score > scores[idx]) {
+            int image_center_row = (endrow[idx] + startrow[idx]) / 2, image_center_col = (endcol[idx] + startcol[idx]) / 2;
+            auto& pt = pcd->points[image_center_row * width + image_center_col];
+            if (pt.label != idx) {
+                float normdis = 10000000000;
+                for (int row = startrow[idx]; row < endrow[idx]; row++) {
+                    for (int col = startcol[idx]; col < endcol[idx]; col++) {
+                        int i = row *  width + col;
+                        if (pcd->points[i].label == idx) {
+                            float newdis =(row - image_center_row) * (row - image_center_row) + (col - image_center_col) * (col - image_center_col) ;
+                            if ( newdis < normdis) {
+                                normdis = newdis;
+                                centers[idx] = pcd->points[i];
+                            }
+                        }
+                    }
+                }
+            } else {
+                centers[idx] = pt;
+            }
+            scores[idx] = score;
+        }
+    }
+}
 }

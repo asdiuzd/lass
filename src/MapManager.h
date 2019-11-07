@@ -118,6 +118,7 @@ public:
     void dye_through_landmarks();
     void dye_through_render();
     void update_view();
+    void update_centers_to_viewer(std::vector<pcl::PointXYZL>& centers);
     void show_point_cloud();
 };
 }

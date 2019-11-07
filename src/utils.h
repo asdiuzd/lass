@@ -41,6 +41,8 @@ typedef struct mhd_structure {
 } mhd_structure;
 
 // show point cloud
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::string vn = std::string("simple"));
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const std::string vn = std::string("simple"));
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const std::string vn = std::string("simple"));
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud, const std::string vn = std::string("simple"));
 
@@ -50,6 +52,8 @@ bool load_info_file(const char *fn, std::vector<Eigen::Matrix4f>& es);
 // load image name-index correspondences
 bool load_list_file(const char *fn, int n_cameras, std::vector<std::string>& image_fns, std::vector<int>& camera_types);
 
+// load bin xyz
+bool load_bin_file(const char *fn, pcl::PointCloud<pcl::PointXYZ>::Ptr& pts);
 /*
     load nvm point cloud
     cameras     - camera pose
@@ -63,7 +67,7 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
 bool load_mhd_file(const char *fn, mhd_structure& data);
 // read nvm from file ifn and write pcd to file ofn
 bool load_sequences(const char *fn, std::vector<std::string>& seqs);
-bool load_7scenes_poses(const std::string base_path, const std::string scene, std::vector<Eigen::Matrix4f>& es, std::vector<std::string>& fns, std::vector<std::string>& relative_fns);
+bool load_7scenes_poses(const std::string base_path, const std::string scene, std::vector<Eigen::Matrix4f>& es, std::vector<std::string>& fns, std::vector<std::string>& relative_fns, bool gettraining= true, bool gettest= true);
 bool normalize_7scenes_poses(const std::string base_path, const std::string scene);
 
 bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize=false);
@@ -115,6 +119,7 @@ inline void hash_colormap(uchar &r, uchar &g, uchar &b, size_t label) {
 void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
 void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs);
 
+void update_candidate_list(pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, std::vector<float>& scores, std::vector<pcl::PointXYZL>& centers, int width);
 }
 
 #endif

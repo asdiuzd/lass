@@ -88,6 +88,23 @@ void MapManager::update_view() {
     }
 }
 
+void MapManager::update_centers_to_viewer(std::vector<pcl::PointXYZL>& centers) {
+    m_viewer->removePointCloud("centers");
+    PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
+    for (auto& pt : centers) {
+        PointXYZRGB new_pt;
+        new_pt.x = pt.x;
+        new_pt.y = pt.y;
+        new_pt.z = pt.z;
+        new_pt.r = new_pt.g = new_pt.b = 230;
+        pcd->points.emplace_back(new_pt);
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(pcd);
+    m_viewer->addPointCloud(pcd, rgb, "centers");
+    m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "centers");
+    m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "centers");
+}
+
 MapManager::MapManager():
     m_pcd(new PointCloud<PointXYZRGB>()),
     m_octree(1.0f),
@@ -389,9 +406,9 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
             d = extrinsics.block(0, 0, 3, 3).transpose() * dc + origin;
 
             auto &pt = pcd->points[v * width + u];
-            pt.x = d(0);
-            pt.y = d(1);
-            pt.z = d(2);
+            // pt.x = d(0);
+            // pt.y = d(1);
+            // pt.z = d(2);
             d = d - origin;
             d.normalize();
 
@@ -402,7 +419,8 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                     LOG(INFO) << "Alert! " << idx << endl;
                 }
                 hit_count++;
-                pt.label = raycast_pcd->points[idx].label;
+                // pt.label = raycast_pcd->points[idx].label;
+                pt = raycast_pcd->points[idx];
                 if (centers.empty()) {
                     depth[v * width + u] = euclidean_distance(
                         raycast_pcd->points[idx].x - origin[0],
