@@ -18,6 +18,9 @@ for ((i=1;i<=25;i++)); do
     mkdir -p cambridge_raycast/seq$i
 done
 
+mkdir -p cambridge_raycast/img cambridge_raycast/img_east cambridge_raycast/img_west cambridge_raycast/img_south cambridge_raycast/img_north
+
+
 # run raycast
 ./test_cambridge_landmark ../scripts/cambridge_config/${seq_name}.json ${dataset_base_dir}/${seq_name}/
 
@@ -39,6 +42,10 @@ if [ "$run_blend_color" = true ] ; then
     for ((i=1;i<=25;i++)); do
         mkdir -p cambridge_all/${seq_name}/blend_color/seq$i
     done
+    cd cambridge_all/${seq_name}/blend_color
+    mkdir -p img img_east img_west img_north img_south
+    cd ../../..
+
     ./test_blend_color ${dataset_base_dir}/${seq_name}/ cambridge_all/${seq_name}/raycast cambridge_all/${seq_name}/raycast png
 fi
 
