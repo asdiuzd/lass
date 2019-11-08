@@ -898,7 +898,7 @@ void filter_few_colors(cv::Mat &img, int few_color_threshold) {
     }
 }
 
-void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs) {
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs, int point_size) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr camera_points(new PointCloud<PointXYZRGB>());
     for (size_t i = 0; i < Twcs.size(); ++i) {
         Eigen::Matrix4f e = Twcs[i];
@@ -928,8 +928,10 @@ void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisu
         }
     }
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(camera_points);
-    viewer->addPointCloud(camera_points, colors, "camera_points");
-    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 5, "camera_points");
+    static int i = 0;
+    i++;
+    viewer->addPointCloud(camera_points, colors, "camera_points" + std::to_string(i));
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size, "camera_points" + std::to_string(i));
 }
 
 void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<float>& scores, vector<PointXYZL>& centers, int width) {

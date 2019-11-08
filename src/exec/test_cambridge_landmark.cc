@@ -47,7 +47,8 @@ struct Cluster {
     int max_visible_pixel;
 };
 
-std::vector<Eigen::Matrix4f> g_Twcs;
+std::vector<Eigen::Matrix4f> g_Twcs_train;
+std::vector<Eigen::Matrix4f> g_Twcs_test;
 } // namespace
 
 inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename, std::map<std::string, float> &focal_map) {
@@ -113,7 +114,10 @@ inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, b
     viewer->addPointCloud(cloud, cloud_color_handler, "base_cloud");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 0.5, "base_cloud");
     viewer->addCoordinateSystem(1.0);
-    if (visualize_trajectory) lass::add_camera_trajectory_to_viewer(viewer, g_Twcs);
+    if (visualize_trajectory) {
+        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_train, 2);
+        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_test, 10);
+    }
     while (!viewer->wasStopped() && !g_stop_view) {
         viewer->spinOnce(100);
     }
@@ -620,18 +624,23 @@ int main(int argc, char **argv) {
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
-    std::vector<Eigen::Matrix4f> Twcs;
-    for (const auto &p : poses_twc_all) {
+    for (const auto &p : poses_twc_train) {
         Eigen::Matrix4f Twc;
         Twc.setIdentity();
         Twc.block<3, 3>(0, 0) = p.q.matrix();
         Twc.block<3, 1>(0, 3) = p.p;
-        Twcs.push_back(Twc);
+        g_Twcs_train.push_back(Twc);
     }
-    g_Twcs = Twcs;
+    for (const auto &p : poses_twc_test) {
+        Eigen::Matrix4f Twc;
+        Twc.setIdentity();
+        Twc.block<3, 3>(0, 0) = p.q.matrix();
+        Twc.block<3, 1>(0, 3) = p.p;
+        g_Twcs_test.push_back(Twc);
+    }
 
-    // visualize_rgb_points(curr_pcd);
-    visualize_pcd(curr_pcd);
+    visualize_rgb_points(curr_pcd);
+    // visualize_pcd(curr_pcd);
 
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
     std::vector<Cluster> cluster_centers;

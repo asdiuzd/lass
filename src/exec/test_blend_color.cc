@@ -105,14 +105,14 @@ int main(int argc, char **argv) {
             int label = int(color[1]) * 256 + int(color[2]);
             if (label != idx_center) continue;
             cv::Point2f pt(float(pt_2d.x()), float(pt_2d.y()));
-            cv::circle(img_blend, pt, 3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-            // cv::drawMarker(img_blend, pt, cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 15, 1, cv::LINE_AA);
+            // cv::circle(img_blend, pt, 3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+            cv::drawMarker(img_blend, pt, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 15, 1, cv::LINE_AA);
         }
 
         name = seg_prefix + "/../blend_color/" + name;
         name = name.substr(0, name.length() - 3) + "jpg";
-        // cv::imshow("vis", img_blend);
-        // cv::waitKey(0);
+        cv::imshow("vis", img_blend);
+        cv::waitKey(0);
         cv::imwrite(name, img_blend);
         static int count = 0;
         if (count % 10 == 0) {
