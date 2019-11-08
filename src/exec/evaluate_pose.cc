@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
     const int pose_num = 1000;
     auto gt_poses = read_7scenes_pose(gt_dir, pose_num, "gt");
     auto pred_poses = read_7scenes_pose(pred_dir, pose_num, "test");
-    assert(pred_poses.size() == gt_pose.size());
+    assert(pred_poses.size() == gt_poses.size());
     double APE = 0, ARE = 0, Acount = 0;
     std::vector<double> APEs, AREs;
     for (int i = 0; i < pose_num; ++i) {
