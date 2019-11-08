@@ -439,7 +439,7 @@ inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
     LOG(INFO) << "finished output json" << endl;
 }
 
-inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, std::vector<Cluster> &cluster_centers) {
+inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, std::vector<Cluster> &cluster_centers, double raycast_voxel_grid) {
     std::cout << __func__ << std::endl;
     camera_intrinsics K;
     const int resize_ratio_visibility = 4;
@@ -455,7 +455,8 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     mm->m_labeled_pcd = labeled_pcd;
     // mm->prepare_octree_for_target_pcd(0.3);
     // mm->prepare_octree_for_target_pcd(0.1); for greatcourt
-    mm->prepare_octree_for_target_pcd(0.1);
+    // mm->prepare_octree_for_target_pcd(0.1);
+    mm->prepare_octree_for_target_pcd(raycast_voxel_grid);
 
     std::vector<pcl::PointXYZRGB> empty_centers;
 
@@ -507,7 +508,10 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
                         count++;
                     }
                 }
-                if (count > 0) cluster_centers[i].center = pt_sum / count;
+                if (count > 0) {
+                    cluster_centers[i].center = pt_sum / count;
+                    cluster.max_visible_pixel = cluster_visible_count[i];
+                }
             }
         }
 
@@ -611,6 +615,7 @@ int main(int argc, char **argv) {
     load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
+    double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
@@ -631,7 +636,7 @@ int main(int argc, char **argv) {
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
-    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers);
+    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);

@@ -2,6 +2,7 @@
     "obj" : "StMarysChurch.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 1.0,
+    "raycast_voxel_grid": 0.1,
     "statical_filter": {
         "mean_K" : 6.0,
         "stddev" : 2.0
