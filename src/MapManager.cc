@@ -12,6 +12,8 @@
 #include <thread>
 #include <chrono>
 #include <opencv2/opencv.hpp>
+#include <pcl/surface/vtk_smoothing/vtk_utils.h>
+#include "mesh_sampling.h"
 
 #include "utils.h"
 #include "MapManager.h"
@@ -84,6 +86,23 @@ void MapManager::update_view() {
     if (m_show_camera_extrinsics) {
         update_camera_trajectory_to_viewer();
     }
+}
+
+void MapManager::update_centers_to_viewer(std::vector<pcl::PointXYZL>& centers) {
+    m_viewer->removePointCloud("centers");
+    PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
+    for (auto& pt : centers) {
+        PointXYZRGB new_pt;
+        new_pt.x = pt.x;
+        new_pt.y = pt.y;
+        new_pt.z = pt.z;
+        new_pt.r = new_pt.g = new_pt.b = 230;
+        pcd->points.emplace_back(new_pt);
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(pcd);
+    m_viewer->addPointCloud(pcd, rgb, "centers");
+    m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "centers");
+    m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "centers");
 }
 
 MapManager::MapManager():
@@ -175,6 +194,28 @@ void MapManager::load_pcd_pcl(const std::string& fn) {
 
 void MapManager::load_ply_pcl(const std::string& fn) {
     CHECK(io::loadPLYFile(fn.c_str(), *m_pcd) >= 0) << "can not load: " << fn << endl;
+}
+
+void MapManager::load_and_sample_ply(const std::string& fn, const int sample_number) {
+    PolygonMesh mesh;
+    CHECK(io::loadPLYFile(fn.c_str(), mesh) >= 0) << "can not load: " << fn << endl;
+
+    vtkSmartPointer<vtkPolyData> vtkmesh;
+    VTKUtils::convertToVTK(mesh, vtkmesh);
+    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
+    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
+
+    this->m_pcd->points.resize(sample_number);
+    for (auto idx = 0; idx < sample_number; idx++) {
+        auto& pt1 = this->m_pcd->points[idx];
+        auto& pt2 = cloud->points[idx];
+        pt1.x = pt2.x;
+        pt1.y = pt2.y;
+        pt1.z = pt2.z;
+        pt1.r = pt2.r;
+        pt1.g = pt2.g;
+        pt1.b = pt2.b;
+    }
 }
 
 void MapManager::export_to_pcd(const std::string& fn) {
@@ -345,7 +386,7 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
         (*pcd_visible)->points.resize(width * height);
     }
 
-    Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).transpose() * extrinsics.block(0, 3, 3, 1);
+    Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).inverse() * extrinsics.block(0, 3, 3, 1);
     vector<vector<Eigen::Vector3f>> directions(width, vector<Eigen::Vector3f>(height));
     vector<double> depth(width * height, 999999);
 
@@ -365,12 +406,12 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
             auto &d = directions[u][v];
             vector<int> k_indices;
             Eigen::Vector3f dc((u - cx) / fx, (v - cy) / fy, 1);
-            d = extrinsics.block(0, 0, 3, 3).transpose() * dc + origin;
+            d = extrinsics.block(0, 0, 3, 3).inverse() * dc + origin;
 
             auto &pt = pcd->points[v * width + u];
-            pt.x = d(0);
-            pt.y = d(1);
-            pt.z = d(2);
+            // pt.x = d(0);
+            // pt.y = d(1);
+            // pt.z = d(2);
             d = d - origin;
             d.normalize();
 
@@ -381,7 +422,8 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                     LOG(INFO) << "Alert! " << idx << endl;
                 }
                 hit_count++;
-                pt.label = raycast_pcd->points[idx].label;
+                // pt.label = raycast_pcd->points[idx].label;
+                pt = raycast_pcd->points[idx];
                 if (centers.empty()) {
                     depth[v * width + u] = euclidean_distance(
                         raycast_pcd->points[idx].x - origin[0],

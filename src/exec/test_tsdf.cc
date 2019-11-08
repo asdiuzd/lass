@@ -20,41 +20,28 @@
 using namespace std;
 using namespace lass;
 using namespace pcl;
+using namespace cv;
 namespace fs = std::experimental::filesystem;
 using json = nlohmann::json;
 
-void generate_centers(json& j, shared_ptr<MapManager>& mm) {
-    vector<PointXYZRGB>    centers{static_cast<unsigned long>(mm->max_target_label), PointXYZRGB{0, 0, 0}};
-    vector<int>         point_counter(static_cast<unsigned long>(mm->max_target_label), 0);
-
+void generate_centers(json& j, vector<PointXYZL>& centers) {
     LOG(INFO) << centers.size() << endl;
-    LOG(INFO) << point_counter.size() << endl;
-    LOG(INFO) << mm->max_target_label << endl;
-    LOG(INFO) << "process center and RGB" << endl;
-    for (auto& pt: mm->m_target_pcd->points) {
-        auto& label = pt.label;
-        centers[label].x += pt.x;
-        centers[label].y += pt.y;
-        centers[label].z += pt.z;
-        point_counter[label]++;
-    }
 
-    centers[0].r = centers[0].g = centers[0].b = 0;
+    // 0 is invalid
     LOG(INFO) << "center of label 0: " << centers[0] << endl;
     j.push_back(
-        {centers[0].x, centers[0].y, centers[0].z, centers[0].r, centers[0].g, centers[0].b}
+        {centers[0].x, centers[0].y, centers[0].z, 0, 0, 0}
     );
 
-    for (int idx = 1; idx < mm->max_target_label; idx++) {
+    for (int idx = 1; idx < centers.size(); idx++) {
         auto& center = centers[idx];
-        center.x /= point_counter[idx];
-        center.y /= point_counter[idx];
-        center.z /= point_counter[idx];
-        GroundColorMix(center.r, center.g, center.b, normalize_value(idx, 0, mm->max_target_label));
+        CHECK(idx == center.label || center.label == 0) << "idx = " << idx << ", label = " << center.label << endl;
+        unsigned char r, g, b;
+        GroundColorMix(r, g, b, normalize_value(idx, 0, centers.size()));
         {
             // debug scope
             // make sure each color map to only one label
-            uint32_t unique_key = (uint32_t(center.r) << 16) + (uint32_t(center.g) << 8) + uint32_t(center.b);
+            uint32_t unique_key = (uint32_t(r) << 16) + (uint32_t(g) << 8) + uint32_t(b);
             static std::map<uint32_t, uint32_t> color_map;
             if (color_map.count(unique_key) > 0) {
                 CHECK(color_map[unique_key] == idx);
@@ -63,7 +50,7 @@ void generate_centers(json& j, shared_ptr<MapManager>& mm) {
             }     
         }
         j.push_back(
-            {center.x, center.y, center.z, center.r, center.g, center.b}
+            {center.x, center.y, center.z, r, g, b}
         );
     }
 }
@@ -79,7 +66,6 @@ void generate_es(json& j, vector<string>& image_fns, vector<Eigen::Matrix4f>& es
             }
         }
     }
-
 }
 
 void process_path(fs::path& fn, const string& target_path, string& output_fn) {
@@ -107,8 +93,8 @@ void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, floa
     for (int idx = 0; idx < mm->m_pcd->points.size(); idx++) {
         mm->m_index_of_landmark->indices[idx] = idx;
     }
-    mm->update_view();
-    mm->show_point_cloud();
+    // mm->update_view();
+    // mm->show_point_cloud();
 
     mm->supervoxel_landmark_clustering(voxel_resolution, seed_resolution, 1.0, 0.0, 0.1);
     // mm->set_view_target_pcd(true);
@@ -117,9 +103,8 @@ void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, floa
     
     mm->filter_minor_segmentations(30);
     mm->m_pcd = mm->extract_points_from_supervoxel();
-    mm->update_view();
-    mm->show_point_cloud();
-
+    // mm->update_view();
+    // mm->show_point_cloud();
 }
 
 void visualize_centers(json& j_output, shared_ptr<MapManager>& mm) {
@@ -194,7 +179,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     mm->prepare_octree_for_target_pcd(0.02);
 
     // generate json
-    generate_centers(j_output["centers"], mm);
+    // generate_centers(j_output["centers"], mm);
     generate_es(j_output["camera_poses"], relative_fns, es);
     ofstream jout(parameters_output_fn);
     jout << j_output.dump(4);
@@ -223,8 +208,8 @@ void test_raycasting_7scenes(int argc, char** argv) {
         // ybbbbt: dirty fix for new interface
         mm->m_labeled_pcd = mm->m_target_pcd;
         // fix 7 scenes gt
-        // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.006880049706, -0.00333539999278, -0.0223485151692);
-        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).transpose() * Eigen::Vector3f(0.0245, 0, 0);
+        // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.006880049706, -0.00333539999278, -0.0223485151692);
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
         mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
 
         for (int i = 0; i < width; i++) {
@@ -318,30 +303,130 @@ void test_ply(int argc, char** argv) {
     }
     CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
 
+    const int scale = 1;
+    const int width = 640 / scale, height = 480 / scale;
+    // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    // float rgb_focal = 525;
+    float rgb_focal = 520;
+    const float fx = rgb_focal / scale, fy = rgb_focal / scale;
+    const float cx = 320 / scale, cy = 240 / scale;
+    const camera_intrinsics intrsinsics{
+        .cx = cx, .cy = cy, .fx = fx, .fy = fy, .width = width, .height = height
+    };
+
+    vector<Eigen::Matrix4f> es;
+    vector<string> fns, relative_fns;
+
     PolygonMesh mesh;
     io::loadPLYFile(ply_path, mesh);
 
     const int sample_number = 10000000;
 
-    vtkSmartPointer<vtkPolyData> vtkmesh;
-    VTKUtils::convertToVTK(mesh, vtkmesh);
-    PointCloud<PointXYZRGBNormal>::Ptr cloud(new PointCloud<PointXYZRGBNormal>);
-    uniform_sampling(vtkmesh, sample_number, true, true, *cloud);
-
     auto mm = make_shared<MapManager>();
-    mm->m_pcd->points.resize(sample_number);
-    for (auto idx = 0; idx < sample_number; idx++) {
-        auto& pt1 = mm->m_pcd->points[idx];
-        auto& pt2 = cloud->points[idx];
-        pt1.x = pt2.x;
-        pt1.y = pt2.y;
-        pt1.z = pt2.z;
-        pt1.r = pt2.r;
-        pt1.g = pt2.g;
-        pt1.b = pt2.b;
+    mm->load_and_sample_ply(ply_path, sample_number);
+    processing(mm, voxel_resolution, seed_resolution);
+
+    mm->prepare_octree_for_target_pcd(0.02);
+
+    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
+    cv::Mat save_img(cv::Size(width, height), CV_8UC3);
+    vector<string> image_fns;
+
+    // load camera poses and file names
+    load_7scenes_poses(base_path, scene, es, fns, relative_fns, true, false);
+
+    // es.resize(10);
+
+    vector<float> scores(mm->max_target_label, 0);
+    PointXYZL default_center;
+    default_center.x = default_center.y = default_center.z = default_center.label = 0;
+    vector<PointXYZL> centers(mm->max_target_label, default_center);
+    for (int idx = 0; idx < es.size(); idx++) {
+        LOG_IF(INFO, idx % 10 == 0) << idx << "/" << es.size() << endl;
+        Eigen::Matrix4f e = es[idx];
+        fs::path fn = fns[idx];
+        string image_fn;
+        process_path(fn, target_path, image_fn);
+
+        // ybbbbt: dirty fix for new interface
+        mm->m_labeled_pcd = mm->m_target_pcd;
+        // fix 7 scenes gt
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
+        mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
+        update_candidate_list(pcd, scores, centers, width);
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                auto& pt = pcd->points[j * width + i];
+                auto& c = save_img.at<cv::Vec3b>(j, i);
+                if (pt.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                }
+            }
+        }
+
+        // string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
+        // cout << rgb_img_fn << endl;
+        // auto rgb_img = cv::imread(rgb_img_fn);
+        // cv::imwrite(image_fn, save_img);
+        // rgb_img = rgb_img / 2 + save_img / 2;
+        // cv::imshow("show", save_img);
+        // cv::imshow("rgb", rgb_img);
+        // cv::imwrite("show.png", save_img);
+        cv::imwrite(image_fn, save_img);
+        // cv::waitKey(0);
     }
 
-    processing(mm, voxel_resolution, seed_resolution);
+    generate_centers(j_output["centers"], centers);
+    generate_es(j_output["camera_poses"], relative_fns, es);
+
+    // generate json
+    ofstream jout(parameters_output_fn);
+    jout << j_output.dump(4);
+
+    // mm->update_view();
+    // mm->update_centers_to_viewer(centers);
+    // mm->show_point_cloud();
+
+    load_7scenes_poses(base_path, scene, es, fns, relative_fns, false, true);
+
+    for (int idx = 0; idx < es.size(); idx++) {
+        LOG_IF(INFO, idx % 10 == 0) << idx << "/" << es.size() << endl;
+        Eigen::Matrix4f e = es[idx];
+        fs::path fn = fns[idx];
+        string image_fn;
+        process_path(fn, target_path, image_fn);
+
+        // ybbbbt: dirty fix for new interface
+        mm->m_labeled_pcd = mm->m_target_pcd;
+        // fix 7 scenes gt
+        e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) - e.block<3, 3>(0, 0).inverse() * Eigen::Vector3f(0.0245, 0, 0);
+        mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                auto& pt = pcd->points[j * width + i];
+                auto& c = save_img.at<cv::Vec3b>(j, i);
+                if (pt.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                }
+            }
+        }
+
+        // string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
+        // cout << rgb_img_fn << endl;
+        // auto rgb_img = cv::imread(rgb_img_fn);
+        // cv::imwrite(image_fn, save_img);
+        // rgb_img = rgb_img / 2 + save_img / 2;
+        // cv::imshow("show", save_img);
+        // cv::imshow("rgb", rgb_img);
+        // cv::imwrite("show.png", save_img);
+        cv::imwrite(image_fn, save_img);
+        // cv::waitKey(0);
+    }
+
 }
 
 int main(int argc, char** argv) {
@@ -351,6 +436,10 @@ int main(int argc, char** argv) {
      */
 
     // test_raycasting_7scenes(argc, argv);
-    test_ply(argc, argv);
+    // test_ply(argc, argv);
     // test_normalize_rotations(argc, argv);
+    // test_rendered_depth();
+    PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
+    load_and_sample_obj(argv[1], 40000000, pcd);
+    visualize_pcd(pcd);
 }

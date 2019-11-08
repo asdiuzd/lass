@@ -1,12 +1,14 @@
 {
+    "obj" : "kingscollege.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 0.3,
+    "raycast_voxel_grid": 0.08,
     "statical_filter": {
         "mean_K" : 25.0,
         "stddev" : 2.0
     },
     "supervoxel" : {
-        "voxel_resolution" : 0.1,
+        "voxel_resolution" : 0.03,
         "seed_resolution" : 2.0
     }
 }

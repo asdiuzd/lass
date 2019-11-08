@@ -76,6 +76,7 @@ public:
     void load_nvm_pcl(const std::string& fn);
     void load_pcd_pcl(const std::string& fn);
     void load_ply_pcl(const std::string& fn);
+    void load_and_sample_ply(const std::string& fn, const int sample_number);
     void load_semantic_json(const std::string& fn);
     void load_parameters(const std::string& fn);
     void load_from_dir(const std::string& dir);
@@ -117,6 +118,7 @@ public:
     void dye_through_landmarks();
     void dye_through_render();
     void update_view();
+    void update_centers_to_viewer(std::vector<pcl::PointXYZL>& centers);
     void show_point_cloud();
 };
 }
