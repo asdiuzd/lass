@@ -522,6 +522,12 @@ inline void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::Point
         std::string fname = folder_prefix + "seq" + std::to_string(i);
         int ret = system(("mkdir -p " + fname).c_str());
     }
+    int ret;
+    ret = system(("mkdir -p " + folder_prefix + "img").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_east").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_west").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_north").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_south").c_str());
     camera_intrinsics K;
     K.cx = 960 / resize_ratio;
     K.cy = 540 / resize_ratio;
