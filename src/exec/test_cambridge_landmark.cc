@@ -81,7 +81,7 @@ inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename
     return pose_data;
 }
 
-inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map) {
+inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map, pcl::PointCloud<pcl::PointXYZRGB>::Ptr *cloud = nullptr) {
     focal_map.clear();
     std::vector<CameraF> cameras;
     std::vector<Point3DF> points;
@@ -96,6 +96,20 @@ inline void load_data_from_nvm(const std::string &filename, std::map<std::string
         std::string filename = names[i];
         filename = filename.substr(0, filename.length() - 3) + "png";
         focal_map[filename] = cameras[i].f;
+    }
+    if (cloud) {
+        LOG(WARNING) << __func__ << " point coordinate abs > 1000 would be removed!";
+        for (int i = 0; i < points.size(); ++i) {
+            pcl::PointXYZRGB pt;
+            pt.x = points[i].xyz[0];
+            pt.y = points[i].xyz[1];
+            pt.z = points[i].xyz[2];
+            float xxx = pt.x + pt.y + pt.z;
+            if (std::isnan(xxx) || std::isinf(xxx)) continue;
+            if (std::abs(pt.x) > 1000 || std::abs(pt.y) > 1000 || std::abs(pt.z) > 1000) continue;
+            pt.r = pt.g = pt.b = 200;
+            (*cloud)->points.push_back(pt);
+        }
     }
 }
 
@@ -614,10 +628,11 @@ int main(int argc, char **argv) {
     // load data
     const std::string data_base_dir(argv[2]);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
     load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 20000000, curr_pcd);
     std::map<std::string, float> focal_map;
-    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map);
+    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, &nvm_pcd);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
     double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
@@ -639,6 +654,7 @@ int main(int argc, char **argv) {
         g_Twcs_test.push_back(Twc);
     }
 
+    visualize_rgb_points(nvm_pcd);
     visualize_rgb_points(curr_pcd);
     // visualize_pcd(curr_pcd);
 
