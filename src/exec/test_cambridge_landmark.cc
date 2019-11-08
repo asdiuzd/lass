@@ -307,6 +307,7 @@ inline void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB
     curr_pcd_labeled->points.reserve(curr_pcd->points.size());
     // supervoxel clustering
     {
+        LOG(INFO) << "start supervoxel clustering";
         SupervoxelClustering<PointXYZRGB> super(j_config["supervoxel"]["voxel_resolution"],
                                                 j_config["supervoxel"]["seed_resolution"]);
         std::map<uint32_t, Supervoxel<PointXYZRGB>::Ptr> supervoxel_clusters;
