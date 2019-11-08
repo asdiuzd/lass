@@ -454,6 +454,7 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     mm->m_target_pcd = labeled_pcd;
     mm->m_labeled_pcd = labeled_pcd;
     // mm->prepare_octree_for_target_pcd(0.3);
+    // mm->prepare_octree_for_target_pcd(0.1); for greatcourt
     mm->prepare_octree_for_target_pcd(0.1);
 
     std::vector<pcl::PointXYZRGB> empty_centers;
