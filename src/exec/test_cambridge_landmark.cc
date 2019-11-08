@@ -505,7 +505,10 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
                         count++;
                     }
                 }
-                if (count > 0) cluster_centers[i].center = pt_sum / count;
+                if (count > 0) {
+                    cluster_centers[i].center = pt_sum / count;
+                    cluster.max_visible_pixel = cluster_visible_count[i];
+                }
             }
         }
 
