@@ -27,8 +27,6 @@ bool g_disbale_viewer = false;
 
 const int resize_ratio = 2;
 
-const std::string folder_prefix = "cambridge_raycast/";
-
 struct PoseData {
     std::string filename;
     Eigen::Quaternionf q;
@@ -406,7 +404,8 @@ inline void filter_to_sparse_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, 
     }
 }
 
-inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
+inline void dump_parameters(const std::string &output_base_dir,
+                            const std::vector<Cluster> &cluster_centers,
                             const std::vector<PoseData> &train_poses_twc,
                             const std::vector<PoseData> &test_poses_twc,
                             const std::vector<PoseData> &all_poses_twc) {
@@ -419,7 +418,7 @@ inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
         auto center = centers[idx];
         j_centers.push_back({center.center.x(), center.center.y(), center.center.z()});
     }
-    ofstream o_id2centers{"id2centers.json"};
+    ofstream o_id2centers{output_base_dir + "/id2centers.json"};
     o_id2centers << std::setw(4) << j_centers;
 
     json j_es;
@@ -437,7 +436,7 @@ inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
         j_es[p.filename].push_back(p.focal);
     }
 
-    ofstream o_es("out_extrinsics.json");
+    ofstream o_es(output_base_dir + "/out_extrinsics.json");
     o_es << std::setw(4) << j_es;
 
     // train test split
@@ -448,10 +447,10 @@ inline void dump_parameters(const std::vector<Cluster> &cluster_centers,
     for (const auto &p : test_poses_twc) {
         test_list.push_back(p.filename);
     }
-    ofstream o_train_list{"train_list.json"};
+    ofstream o_train_list{output_base_dir + "/train_list.json"};
     json j_train_list = train_list;
     o_train_list << std::setw(4) << j_train_list;
-    ofstream o_test_list{"test_list.json"};
+    ofstream o_test_list{output_base_dir + "/test_list.json"};
     json j_test_list = test_list;
     o_test_list << std::setw(4) << j_test_list;
 
@@ -539,18 +538,10 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     }
 }
 
-inline void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::vector<Cluster> &cluster_centers) {
-    // create folders
-    for (int i = 1; i < 25; ++i) {
-        std::string fname = folder_prefix + "seq" + std::to_string(i);
-        int ret = system(("mkdir -p " + fname).c_str());
-    }
-    int ret;
-    ret = system(("mkdir -p " + folder_prefix + "img").c_str());
-    ret = system(("mkdir -p " + folder_prefix + "img_east").c_str());
-    ret = system(("mkdir -p " + folder_prefix + "img_west").c_str());
-    ret = system(("mkdir -p " + folder_prefix + "img_north").c_str());
-    ret = system(("mkdir -p " + folder_prefix + "img_south").c_str());
+inline void raycast_to_images(const std::string &output_base_dir,
+                              const std::vector<PoseData> &poses_twc,
+                              pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd,
+                              const std::vector<Cluster> &cluster_centers) {
     camera_intrinsics K;
     K.cx = 960 / resize_ratio;
     K.cy = 540 / resize_ratio;
@@ -612,7 +603,10 @@ inline void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::Point
             }
         }
         // cv::imshow("raycast", save_img);
-        cv::imwrite(folder_prefix + p.filename, save_img);
+        std::string output_filename = output_base_dir + "/" + p.filename;
+        // create directory if not exist
+        int ret = system(("mkdir -p " + output_filename.substr(0, output_filename.find_last_of("/"))).c_str());
+        cv::imwrite(output_filename, save_img);
         // cv::waitKey(0);
         fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
         fflush(stdout);
@@ -620,13 +614,19 @@ inline void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::Point
 }
 
 int main(int argc, char **argv) {
+    if (argc < 4) {
+        std::cerr << "Usage ./test_cambridge_landmark config_filename data_base_dir output_base_dir\n";
+        exit(-1);
+    }
+    const std::string config_filename(argv[1]);
+    const std::string data_base_dir(argv[2]);
+    const std::string output_base_dir(argv[3]);
     // load config
-    std::ifstream ifs(argv[1]);
+    std::ifstream ifs(config_filename);
     json j_config;
     ifs >> j_config;
     ifs.close();
     // load data
-    const std::string data_base_dir(argv[2]);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
@@ -665,8 +665,9 @@ int main(int argc, char **argv) {
     adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
-    dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
-    raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
+    int ret = system(("mkdir -p " + output_base_dir).c_str());
+    dump_parameters(output_base_dir, cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
+    raycast_to_images(output_base_dir, poses_twc_all, labeled_pcd, cluster_centers);
     LOG(INFO) << "Finish All";
 
     return 0;

@@ -35,8 +35,8 @@ inline void repaint_color(cv::Mat &img) {
 
 // args path_to_source_images path_to_raycast_images path_to_tran_test_list_json_base_dir src_img_format(jpg or png)
 int main(int argc, char **argv) {
-    const std::string src_prefix = argv[1];
-    const std::string seg_prefix = argv[2];
+    const std::string dataset_base_dir = argv[1];
+    const std::string segmentation_base_dir = argv[2];
     const std::string json_base_dir = argv[3];
     const std::string src_img_format = argv[4];
     // read cameras
@@ -78,8 +78,8 @@ int main(int argc, char **argv) {
         const auto &cam = camera_list[i];
         std::string name = cam.filename;
         // std::cout << name << std::endl;
-        cv::Mat img_src = cv::imread(src_prefix + "/" + name.substr(0, name.length() - 3) + src_img_format);
-        cv::Mat img_cast = cv::imread(seg_prefix + "/" + name);
+        cv::Mat img_src = cv::imread(dataset_base_dir + "/" + name.substr(0, name.length() - 3) + src_img_format);
+        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name);
         cv::Mat img_orig_seg = img_cast.clone();
         // blend color
         repaint_color(img_cast);
@@ -109,10 +109,11 @@ int main(int argc, char **argv) {
             cv::drawMarker(img_blend, pt, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 15, 1, cv::LINE_AA);
         }
 
-        name = seg_prefix + "/../blend_color/" + name;
+        name = segmentation_base_dir + "/../blend_color/" + name;
         name = name.substr(0, name.length() - 3) + "jpg";
         cv::imshow("vis", img_blend);
         cv::waitKey(0);
+        int ret = system(("mkdir -p " + name.substr(0, name.find_last_of("/"))).c_str());
         cv::imwrite(name, img_blend);
         static int count = 0;
         if (count % 10 == 0) {

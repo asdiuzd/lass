@@ -9,45 +9,22 @@ if [ $# -eq 1 ]
 fi
 #dataset_base_dir=~/Data/cambridge/
 dataset_base_dir=~/Dataset/CambridgeLandmarks/
+output_base_dir=./cambridge_all/
 
 cd ../bin
 
-rm -rf cambridge_raycast
-rm -rf cambridge_all/${seq_name}
+segmentation_dir=${output_base_dir}/${seq_name}/segmentation/
+blend_color_dir=${output_base_dir}/${seq_name}/blend_color/
 
-for ((i=1;i<=25;i++)); do
-    mkdir -p cambridge_raycast/seq$i
-done
-
-mkdir -p cambridge_raycast/img cambridge_raycast/img_east cambridge_raycast/img_west cambridge_raycast/img_south cambridge_raycast/img_north
-
+rm -rf ${segmentation_dir} ${blend_color}
 
 # run raycast
-./test_cambridge_landmark ../scripts/cambridge_config/${seq_name}.json ${dataset_base_dir}/${seq_name}/
-
-# copy parameters
-cp train_list.json cambridge_raycast/
-cp test_list.json cambridge_raycast/
-cp test_list.json cambridge_raycast/
-cp id2centers.json cambridge_raycast/
-cp out_extrinsics.json cambridge_raycast/
-
-
-# move to standalone folders
-mkdir -p cambridge_all/${seq_name}
-mv  cambridge_raycast cambridge_all/${seq_name}/raycast/
+./test_cambridge_landmark ../scripts/cambridge_config/${seq_name}.json ${dataset_base_dir}/${seq_name}/ ${segmentation_dir}
 
 # run blend color
 run_blend_color=true
 if [ "$run_blend_color" = true ] ; then
-    for ((i=1;i<=25;i++)); do
-        mkdir -p cambridge_all/${seq_name}/blend_color/seq$i
-    done
-    cd cambridge_all/${seq_name}/blend_color
-    mkdir -p img img_east img_west img_north img_south
-    cd ../../..
-
-    ./test_blend_color ${dataset_base_dir}/${seq_name}/ cambridge_all/${seq_name}/raycast cambridge_all/${seq_name}/raycast png
+    ./test_blend_color ${dataset_base_dir}/${seq_name}/ ${segmentation_dir} ${segmentation_dir} png
 fi
 
 # remove empty folders
