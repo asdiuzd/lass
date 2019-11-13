@@ -552,7 +552,6 @@ inline void raycast_to_images(const json &j_config,
 
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
     cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
-    cv::Vec3b color;
 
     auto mm = std::make_unique<MapManager>();
     mm->m_target_pcd = labeled_pcd;
@@ -582,6 +581,7 @@ inline void raycast_to_images(const json &j_config,
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
         PointCloud<PointXYZL>::Ptr visible_pcd{new PointCloud<PointXYZL>};
         mm->raycasting_pcd(Tcw, K, pcd, pcl_centers, true, 3, 1.0, "labeled", &visible_pcd);
+        save_img = 0;
         // draw to cv::Mat
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
