@@ -1,9 +1,9 @@
 {
     "obj" : "Street_clean.obj",
     "ply" : "fused_clear.ply",
-    "max_visible_distance" : 50.0,
+    "max_visible_distance" : 100.0,
     "downsample_ratio": 1.0,
-    "raycast_voxel_grid": 0.1,
+    "raycast_voxel_grid": 0.2,
     "statical_filter": {
         "mean_K" : 6.0,
         "stddev" : 2.0
