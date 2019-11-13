@@ -538,7 +538,8 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     }
 }
 
-inline void raycast_to_images(const std::string &output_base_dir,
+inline void raycast_to_images(const json &j_config,
+                              const std::string &output_base_dir,
                               const std::vector<PoseData> &poses_twc,
                               pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd,
                               const std::vector<Cluster> &cluster_centers) {
@@ -547,6 +548,7 @@ inline void raycast_to_images(const std::string &output_base_dir,
     K.cy = 540 / resize_ratio;
     K.width = 1920 / resize_ratio;
     K.height = 1080 / resize_ratio;
+    const float max_visible_distance = j_config.value("max_visible_distance", std::numeric_limits<float>::max());
 
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
     cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
@@ -578,11 +580,16 @@ inline void raycast_to_images(const std::string &output_base_dir,
         Tcw.setIdentity();
         Tcw.block<3, 3>(0, 0) = p.q.conjugate().matrix();
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
-        mm->raycasting_pcd(Tcw, K, pcd, pcl_centers, true, 3, 1.0, "labeled");
+        PointCloud<PointXYZL>::Ptr visible_pcd{new PointCloud<PointXYZL>};
+        mm->raycasting_pcd(Tcw, K, pcd, pcl_centers, true, 3, 1.0, "labeled", &visible_pcd);
         // draw to cv::Mat
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
-                auto &pt = pcd->points[j * K.width + i];
+                int idx = j * K.width + i;
+                auto &pt = pcd->points[idx];
+                auto &pt_3d = visible_pcd->points[idx];
+                float distance = (Eigen::Vector3f(pt_3d.x, pt_3d.y, pt_3d.z) - p.p).norm();
+                if (distance > max_visible_distance) continue;
                 auto &c = save_img.at<cv::Vec3b>(j, i);
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
@@ -613,6 +620,24 @@ inline void raycast_to_images(const std::string &output_base_dir,
     }
 }
 
+void filter_out_bad_poses(const json &j_config, const std::string &data_base_dir, std::vector<PoseData> &poses) {
+    std::vector<PoseData> poses_good;
+    if (j_config.count("bad_poses_list") == 0) return;
+    std::ifstream ifs(data_base_dir + "/" + std::string(j_config["bad_poses_list"]));
+    json j_bad_poses_list;
+    ifs >> j_bad_poses_list;
+    ifs.close();
+    std::unordered_set<std::string> bad_poses_list;
+    for (const auto &n : j_bad_poses_list) {
+        bad_poses_list.insert(std::string(n));
+    }
+    for (const auto &p : poses) {
+        if (bad_poses_list.count(p.filename) > 0) continue;
+        poses_good.push_back(p);
+    }
+    poses_good.swap(poses);
+}
+
 int main(int argc, char **argv) {
     if (argc < 4) {
         std::cerr << "Usage ./test_cambridge_landmark config_filename data_base_dir output_base_dir\n";
@@ -634,7 +659,9 @@ int main(int argc, char **argv) {
     std::map<std::string, float> focal_map;
     load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, &nvm_pcd);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
+    filter_out_bad_poses(j_config, data_base_dir, poses_twc_train);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
+    filter_out_bad_poses(j_config, data_base_dir, poses_twc_test);
     double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
@@ -667,7 +694,7 @@ int main(int argc, char **argv) {
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     int ret = system(("mkdir -p " + output_base_dir).c_str());
     dump_parameters(output_base_dir, cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
-    raycast_to_images(output_base_dir, poses_twc_all, labeled_pcd, cluster_centers);
+    raycast_to_images(j_config, output_base_dir, poses_twc_all, labeled_pcd, cluster_centers);
     LOG(INFO) << "Finish All";
 
     return 0;
