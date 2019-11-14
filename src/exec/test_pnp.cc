@@ -246,7 +246,11 @@ int main(int argc, char **argv) {
         // solve and optimize
         solve_pose(f);
         // evaluate
-        if (f.inlier_indices.empty()) continue;
+        if (f.inlier_indices.empty()) {
+            APEs.push_back(std::numeric_limits<double>::max());
+            AREs.push_back(std::numeric_limits<double>::max());
+            continue;
+        }
         APEs.push_back((f.pcw - f.pcw_gt).norm() * 1e3);
         Eigen::Quaterniond q_diff = f.qcw * f.qcw_gt.conjugate();
         Eigen::AngleAxisd aa(q_diff);
