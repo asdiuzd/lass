@@ -36,3 +36,6 @@ target_link_libraries(evaluate_pose)
 
 add_executable(test_cambridge_assign_voxel_label test_cambridge_assign_voxel_label.cc)
 target_link_libraries(test_cambridge_assign_voxel_label lass)
+
+add_executable(test_blend_color_draw_figure test_blend_color_draw_figure.cc)
+target_link_libraries(test_blend_color_draw_figure lass)
