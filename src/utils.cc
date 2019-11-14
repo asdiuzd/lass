@@ -915,7 +915,15 @@ void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisu
                 pt_axis = qwc * pt_axis * (0.1 * j) + pwc;
                 Eigen::Vector3i color;
                 color.setZero();
-                color(i_axis) = 200;
+                if (point_size > 0) {
+                    color(i_axis) = 200;
+                } else {
+                    switch(point_size) {
+                        case -1: color(0) = 255; break;
+                        case -2: color(1) = 255; break;
+                        default : color(2) = 255; break;
+                    }
+                }
                 pcl::PointXYZRGB pt;
                 pt.x = pt_axis.x();
                 pt.y = pt_axis.y();
@@ -930,6 +938,7 @@ void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisu
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> colors(camera_points);
     static int i = 0;
     i++;
+    point_size = point_size > 0 ? point_size : 4;
     viewer->addPointCloud(camera_points, colors, "camera_points" + std::to_string(i));
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, point_size, "camera_points" + std::to_string(i));
 }

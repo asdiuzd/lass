@@ -111,8 +111,8 @@ int main(int argc, char **argv) {
 
         name = segmentation_base_dir + "/../blend_color/" + name;
         name = name.substr(0, name.length() - 3) + "jpg";
-        cv::imshow("vis", img_blend);
-        cv::waitKey(0);
+        // cv::imshow("vis", img_blend);
+        // cv::waitKey(0);
         int ret = system(("mkdir -p " + name.substr(0, name.find_last_of("/"))).c_str());
         cv::imwrite(name, img_blend);
         static int count = 0;

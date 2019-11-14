@@ -47,6 +47,8 @@ struct Cluster {
 
 std::vector<Eigen::Matrix4f> g_Twcs_train;
 std::vector<Eigen::Matrix4f> g_Twcs_test;
+std::vector<Eigen::Matrix4f> g_Twcs_bad;
+std::vector<Eigen::Matrix4f> g_Twcs_close_to_wall;
 } // namespace
 
 inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename, std::map<std::string, float> &focal_map) {
@@ -128,7 +130,9 @@ inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, b
     viewer->addCoordinateSystem(1.0);
     if (visualize_trajectory) {
         lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_train, 2);
-        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_test, 10);
+        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_test, 4);
+        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_bad, -1);
+        lass::add_camera_trajectory_to_viewer(viewer, g_Twcs_close_to_wall, -2);
     }
     while (!viewer->wasStopped() && !g_stop_view) {
         viewer->spinOnce(100);
@@ -521,7 +525,7 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
                 for (int x = x_begin; x < x_end; ++x) {
                     for (int y = y_begin; y < y_end; ++y) {
                         auto &p = visible_pcd->points[y * K.width + x];
-                        if (p.label != i) continue;  // skip point which does not belong to current label
+                        if (p.label != i) continue; // skip point which does not belong to current label
                         pt_sum += Eigen::Vector3f(p.x, p.y, p.z);
                         count++;
                     }
@@ -620,10 +624,9 @@ inline void raycast_to_images(const json &j_config,
     }
 }
 
-void filter_out_bad_poses(const json &j_config, const std::string &data_base_dir, std::vector<PoseData> &poses) {
-    std::vector<PoseData> poses_good;
-    if (j_config.count("bad_poses_list") == 0) return;
-    std::ifstream ifs(data_base_dir + "/" + std::string(j_config["bad_poses_list"]));
+void filter_out_bad_poses(const json &j_config, const std::string &data_base_dir, std::vector<PoseData> &poses, pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud) {
+    if (j_config.count("bad_pose_list") == 0) return;
+    std::ifstream ifs(data_base_dir + "/" + std::string(j_config["bad_pose_list"]));
     json j_bad_poses_list;
     ifs >> j_bad_poses_list;
     ifs.close();
@@ -631,11 +634,60 @@ void filter_out_bad_poses(const json &j_config, const std::string &data_base_dir
     for (const auto &n : j_bad_poses_list) {
         bad_poses_list.insert(std::string(n));
     }
-    for (const auto &p : poses) {
-        if (bad_poses_list.count(p.filename) > 0) continue;
-        poses_good.push_back(p);
+    // prune poses via bad_poses_list
+    for (auto it = poses.begin(); it != poses.end(); ++it) {
+        if (bad_poses_list.count(it->filename) > 0) {
+            Eigen::Matrix4f Twc;
+            Twc.setIdentity();
+            Twc.block<3, 3>(0, 0) = it->q.matrix();
+            Twc.block<3, 1>(0, 3) = it->p;
+            g_Twcs_bad.push_back(Twc);
+            // it = poses.erase(it);
+        } else {
+            // it++;
+        }
     }
-    poses_good.swap(poses);
+    pcl::KdTreeFLANN<pcl::PointXYZRGB> kdtree;
+    kdtree.setInputCloud(cloud);
+    int K = 1;
+    std::vector<int> point_indices(K);
+    std::vector<float> distances(K);
+    // filter via distance to nearest point
+    int count_near_wall = 0;
+    json j_pose_near_wall_list;
+    for (auto it = poses.begin(); it != poses.end(); ++it) {
+        bool too_close_to_wall = false;
+        pcl::PointXYZRGB pt;
+        pt.x = it->p.x();
+        pt.y = it->p.y();
+        pt.z = it->p.z();
+        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {
+            auto &p = cloud->points[point_indices[0]];
+            float distance = (Eigen::Vector3f(p.x, p.y, p.z) - it->p).norm();
+            if (distance < 0.5) too_close_to_wall = true;
+        }
+        if (too_close_to_wall) {
+            Eigen::Matrix4f Twc;
+            Twc.setIdentity();
+            Twc.block<3, 3>(0, 0) = it->q.matrix();
+            Twc.block<3, 1>(0, 3) = it->p;
+            g_Twcs_close_to_wall.push_back(Twc);
+            if (bad_poses_list.count(it->filename) == 0) j_bad_poses_list.push_back(it->filename);
+            j_pose_near_wall_list.push_back(it->filename);
+            count_near_wall++;
+            // it = poses.erase(it);
+        } else {
+            // it++;
+        }
+    }
+    LOG(INFO) << "find pose near wall " << count_near_wall;
+    std::ofstream ofs;
+    ofs.open(data_base_dir + "/bad_pose_full.json");
+    ofs << std::setw(4) << j_bad_poses_list;
+    ofs.close();
+    ofs.open(data_base_dir + "/pose_near_wall.json");
+    ofs << std::setw(4) << j_pose_near_wall_list;
+    ofs.close();
 }
 
 int main(int argc, char **argv) {
@@ -655,17 +707,16 @@ int main(int argc, char **argv) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
-    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 20000000, curr_pcd);
+    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 200000, curr_pcd);
     std::map<std::string, float> focal_map;
     load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, &nvm_pcd);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
-    filter_out_bad_poses(j_config, data_base_dir, poses_twc_train);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
-    filter_out_bad_poses(j_config, data_base_dir, poses_twc_test);
     double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
+    filter_out_bad_poses(j_config, data_base_dir, poses_twc_all, curr_pcd);
     for (const auto &p : poses_twc_train) {
         Eigen::Matrix4f Twc;
         Twc.setIdentity();
