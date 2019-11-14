@@ -707,7 +707,7 @@ int main(int argc, char **argv) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
-    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 200000, curr_pcd);
+    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 20000000, curr_pcd);
     std::map<std::string, float> focal_map;
     load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, &nvm_pcd);
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
