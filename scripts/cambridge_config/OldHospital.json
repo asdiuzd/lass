@@ -1,7 +1,7 @@
 {
     "obj" : "oldhospital.obj",
     "ply" : "fused.ply",
-    "raycast_voxel_grid" : 0.08,
+    "raycast_voxel_grid" : 0.12,
     "downsample_ratio": 0.5,
     "statical_filter": {
         "mean_K" : 25.0,
@@ -9,6 +9,6 @@
     },
     "supervoxel" : {
         "voxel_resolution" : 0.03,
-        "seed_resolution" : 2.0
+        "seed_resolution" : 1.3
     }
 }

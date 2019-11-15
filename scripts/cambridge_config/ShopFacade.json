@@ -2,13 +2,13 @@
     "obj" : "ShopFacade.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 1.0,
-    "raycast_voxel_grid": 0.08,
+    "raycast_voxel_grid": 0.12,
     "statical_filter": {
         "mean_K" : 6.0,
         "stddev" : 2.0
     },
     "supervoxel" : {
         "voxel_resolution" : 0.03,
-        "seed_resolution" : 2.0
+        "seed_resolution" : 1.3
     }
 }

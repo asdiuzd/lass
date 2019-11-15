@@ -9,6 +9,6 @@
     },
     "supervoxel" : {
         "voxel_resolution" : 0.05,
-        "seed_resolution" : 4.0
+        "seed_resolution" : 2.8
     }
 }
