@@ -42,3 +42,6 @@ target_link_libraries(test_blend_color_draw_figure lass)
 
 add_executable(test_pnp test_pnp.cc)
 target_link_libraries(test_pnp lass)
+
+add_executable(test_pnp_draw_figure test_pnp_draw_figure.cc)
+target_link_libraries(test_pnp_draw_figure lass)
