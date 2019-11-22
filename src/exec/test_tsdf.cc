@@ -37,7 +37,8 @@ void generate_centers(json& j, vector<PointXYZL>& centers) {
         auto& center = centers[idx];
         CHECK(idx == center.label || center.label == 0) << "idx = " << idx << ", label = " << center.label << endl;
         unsigned char r, g, b;
-        GroundColorMix(r, g, b, normalize_value(idx, 0, centers.size()));
+        // GroundColorMix(r, g, b, normalize_value(idx, 0, centers.size()));
+        label_to_rgb(r,g , b, idx);
         {
             // debug scope
             // make sure each color map to only one label
@@ -220,7 +221,9 @@ void test_raycasting_7scenes(int argc, char** argv) {
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
                 } else {
-                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                    // // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                    
+                    label_to_rgb(c[0], c[1], c[2], pt.label);
                 }
             }
         }
@@ -361,7 +364,8 @@ void test_ply(int argc, char** argv) {
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
                 } else {
-                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                label_to_rgb(c[0], c[1], c[2], pt.label);
                 }
             }
         }
@@ -410,7 +414,8 @@ void test_ply(int argc, char** argv) {
                 if (pt.label == 0) {
                     c[0] = c[1] = c[2] = 0;
                 } else {
-                    GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                    // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                    label_to_rgb(c[0], c[1], c[2], pt.label);
                 }
             }
         }
@@ -436,10 +441,10 @@ int main(int argc, char** argv) {
      */
 
     // test_raycasting_7scenes(argc, argv);
-    // test_ply(argc, argv);
+    test_ply(argc, argv);
     // test_normalize_rotations(argc, argv);
     // test_rendered_depth();
-    PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
-    load_and_sample_obj(argv[1], 40000000, pcd);
-    visualize_pcd(pcd);
+    // PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};
+    // load_and_sample_obj(argv[1], 40000000, pcd);
+    // visualize_pcd(pcd);
 }

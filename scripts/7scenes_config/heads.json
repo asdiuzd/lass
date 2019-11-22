@@ -2,7 +2,7 @@
     "model": "../../tsdf-fusion-python/heads.ply",
     "scene": "heads",
     "voxel_resolution": 0.003,
-    "seed_resolution": 0.2,
+    "seed_resolution": 0.13,
     "base_path": "/home/drinkingcoder/Dataset/7scenes/",
     "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",
     "parameters_fn": "parameters.json"

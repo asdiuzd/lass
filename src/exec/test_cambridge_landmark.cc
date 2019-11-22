@@ -137,13 +137,13 @@ inline void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud,
             pt.r = 255;
             pt.g = pt.b = 0;
             centers_pcd->points.push_back(pt);
-            pt.x = c.center_orig.x();
-            pt.y = c.center_orig.y();
-            pt.z = c.center_orig.z();
-            pt.r = 0;
-            pt.g = 0;
-            pt.b = 255;
-            centers_pcd->points.push_back(pt);
+            // pt.x = c.center_orig.x();
+            // pt.y = c.center_orig.y();
+            // pt.z = c.center_orig.z();
+            // pt.r = 0;
+            // pt.g = 0;
+            // pt.b = 255;
+            // centers_pcd->points.push_back(pt);
         }
         pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
         viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");

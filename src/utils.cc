@@ -225,6 +225,11 @@ void load_and_sample_obj(const std::string& fn, const int sample_number, pcl::Po
         // pt1.g = pt2.g;
         // pt1.b = pt2.b;
     }
+
+    PointXYZRGB minpt, maxpt;
+    getMinMax3D(*pcd,minpt, maxpt);
+    LOG(INFO) << "min pt = " << minpt << endl;
+    LOG(INFO) << "max pt = " << maxpt << endl;
 }
 
 bool load_sequences(const char *fn, vector<string>& seqs) {
