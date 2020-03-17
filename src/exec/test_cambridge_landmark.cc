@@ -120,7 +120,7 @@ inline void keyboard_callback(const pcl::visualization::KeyboardEvent &event, vo
     }
 }
 
-inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool visualize_trajectory = true) {
+inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool visualize_trajectory = false) {
     if (g_disbale_viewer) return;
     std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(cloud);
