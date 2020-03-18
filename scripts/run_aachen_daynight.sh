@@ -15,8 +15,8 @@ mkdir -p ${output_base_dir}
 
 run_blend_color=true
 if [ "$run_blend_color" = true ] ; then
-    ./test_blend_color ${dataset_base_dir} ${segmentation_dir} ${segmentation_dir} png
+    ./test_blend_color ${dataset_base_dir} ${segmentation_dir} ${segmentation_dir} jpg
 fi
 
 # remove empty folders
-find ./cambridge_all/ -type d -empty -delete
+find ./${output_base_dir}/ -type d -empty -delete

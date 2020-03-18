@@ -79,7 +79,8 @@ int main(int argc, char **argv) {
         std::string name = cam.filename;
         // std::cout << name << std::endl;
         cv::Mat img_src = cv::imread(dataset_base_dir + "/" + name.substr(0, name.length() - 3) + src_img_format);
-        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name);
+        // cast (segmentation) format is always png
+        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name.substr(0, name.length() - 3) + "png");
         cv::Mat img_orig_seg = img_cast.clone();
         // blend color
         repaint_color(img_cast);
