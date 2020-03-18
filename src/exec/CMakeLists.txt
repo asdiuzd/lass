@@ -31,6 +31,9 @@ target_link_libraries(test_split_robotcar_train_test lass)
 add_executable(test_cambridge_landmark test_cambridge_landmark.cc)
 target_link_libraries(test_cambridge_landmark lass)
 
+add_executable(test_aachen_daynight test_aachen_daynight.cc)
+target_link_libraries(test_aachen_daynight lass)
+
 add_executable(evaluate_pose evaluate_pose.cc)
 target_link_libraries(evaluate_pose)
 
