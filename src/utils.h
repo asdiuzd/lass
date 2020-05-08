@@ -126,7 +126,7 @@ inline float rand01() {
 }
 
 void filter_few_colors(cv::Mat &img, int few_color_threshold = 36);
-void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs);
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs, int point_size = 5);
 
 void update_candidate_list(pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, std::vector<float>& scores, std::vector<pcl::PointXYZL>& centers, int width);
 }
