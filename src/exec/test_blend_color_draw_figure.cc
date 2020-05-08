@@ -35,10 +35,7 @@ inline void repaint_color(cv::Mat &img) {
 
 // args path_to_source_images path_to_raycast_images path_to_tran_test_list_json_base_dir src_img_format(jpg or png)
 int main(int argc, char **argv) {
-    const std::string dataset_base_dir = argv[1];
-    const std::string segmentation_base_dir = argv[2];
-    const std::string json_base_dir = argv[3];
-    const std::string src_img_format = argv[4];
+    const std::string json_base_dir = "/home/ybbbbt/Dropbox/LandmarkSegmentation/draw_figures";
     // read cameras
     std::vector<CameraData> camera_list;
     {
@@ -73,14 +70,13 @@ int main(int argc, char **argv) {
         }
         print_var(centers.size());
     }
-#pragma omp parallel for num_threads(16)
     for (int i = 0; i < camera_list.size(); ++i) {
         const auto &cam = camera_list[i];
+        if (cam.filename != "seq3/frame00039.png") continue;
         std::string name = cam.filename;
         // std::cout << name << std::endl;
-        cv::Mat img_src = cv::imread(dataset_base_dir + "/" + name.substr(0, name.length() - 3) + src_img_format);
-        // cast (segmentation) format is always png
-        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name.substr(0, name.length() - 3) + "png");
+        cv::Mat img_src = cv::imread("/home/ybbbbt/Dropbox/LandmarkSegmentation/draw_figures/frame00039.png");
+        cv::Mat img_cast = cv::imread("/home/ybbbbt/Dropbox/LandmarkSegmentation/draw_figures/frame00039.seg.png");
         cv::Mat img_orig_seg = img_cast.clone();
         // blend color
         repaint_color(img_cast);
@@ -107,13 +103,26 @@ int main(int argc, char **argv) {
             if (label != idx_center) continue;
             cv::Point2f pt(float(pt_2d.x()), float(pt_2d.y()));
             // cv::circle(img_blend, pt, 3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-            cv::drawMarker(img_blend, pt, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 15, 1, cv::LINE_AA);
-        }
+            cv::drawMarker(img_blend, pt, cv::Scalar(0, 0, 255), cv::MARKER_CROSS, 15, 2, cv::LINE_AA);
 
-        name = segmentation_base_dir + "/../blend_color/" + name;
+            if (1) {
+                // test add offset
+                Eigen::Quaterniond qcw = cam.qcw;
+                Eigen::Vector3d pcw = cam.pcw;
+                Eigen::Vector3d pt_c = qcw * center + pcw + Eigen::Vector3d(1, 0, 0);
+                if (pt_c.z() < 0) continue;
+                Eigen::Vector2d pt_2d = pt_c.hnormalized();
+                pt_2d = {pt_2d.x() * cam.focal + cx, pt_2d.y() * cam.focal + cy};
+                pt_2d /= 2.0;
+                if (pt_2d.x() < 0 || pt_2d.x() > new_width - 1 || pt_2d.y() < 0 || pt_2d.y() > new_height - 1) continue;
+                cv::Point2f pt(float(pt_2d.x()), float(pt_2d.y()));
+                // cv::circle(img_blend, pt, 3, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                cv::drawMarker(img_blend, pt, cv::Scalar(0, 255, 0), cv::MARKER_CROSS, 15, 2, cv::LINE_AA);
+            }
+        }
         name = name.substr(0, name.length() - 3) + "jpg";
-        // cv::imshow("vis", img_blend);
-        // cv::waitKey(0);
+        cv::imshow("vis", img_blend);
+        cv::waitKey(0);
         int ret = system(("mkdir -p " + name.substr(0, name.find_last_of("/"))).c_str());
         cv::imwrite(name, img_blend);
         static int count = 0;

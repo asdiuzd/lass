@@ -1,5 +1,4 @@
 #include <pcl/point_types.h>
-#include<experimental/filesystem>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/radius_outlier_removal.h>
@@ -9,7 +8,6 @@
 #include <pcl/segmentation/supervoxel_clustering.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <map>
-#include <memory>
 #include <sstream>
 #include <random>
 #include <thread>
@@ -22,20 +20,22 @@
 using namespace pcl;
 using namespace lass;
 using json = nlohmann::json;
-namespace fs = std::experimental::filesystem;
 
 namespace {
 bool g_stop_view = false;
 bool g_disbale_viewer = false;
-static const int sc_width = 1920 / 2, sc_height = 1080 / 2;
 
 const int resize_ratio = 2;
 
 struct PoseData {
     std::string filename;
+    // qwc
     Eigen::Quaternionf q;
+    // pwc
     Eigen::Vector3f p;
     float focal;
+    int width = 1920;
+    int height = 1080;
 };
 
 struct Cluster {
@@ -55,38 +55,8 @@ std::vector<Eigen::Matrix4f> g_Twcs_bad;
 std::vector<Eigen::Matrix4f> g_Twcs_close_to_wall;
 } // namespace
 
-inline std::vector<PoseData> load_cambridge_pose_txt(const std::string &filename, std::map<std::string, float> &focal_map) {
+inline std::vector<PoseData> load_camera_data_from_nvm(const std::string &image_base_dir, const std::string &filename, pcl::PointCloud<pcl::PointXYZRGB>::Ptr *cloud = nullptr) {
     std::vector<PoseData> pose_data;
-    if (FILE *file = fopen(filename.c_str(), "r")) {
-        char header_line[2048];
-        // skip three useless lines
-        char *unused = fgets(header_line, 100, file);
-        unused = fgets(header_line, 100, file);
-        unused = fgets(header_line, 100, file);
-        char filename_buffer[2048];
-        PoseData pose;
-        while (!feof(file)) {
-            memset(filename_buffer, 0, 2048);
-            if (fscanf(file, "%s %f %f %f %f %f %f %f", filename_buffer, &pose.p.x(), &pose.p.y(), &pose.p.z(), &pose.q.w(), &pose.q.x(), &pose.q.y(), &pose.q.z()) != 8) {
-                break;
-            }
-            // convert to Twc
-            pose.q.normalize();
-            pose.q = pose.q.conjugate();
-            pose.filename = filename_buffer;
-            CHECK(focal_map.count(pose.filename) > 0);
-            pose.focal = focal_map[pose.filename];
-            pose_data.push_back(pose);
-        }
-        fclose(file);
-    } else {
-        std::cerr << "cannot open " << filename << "\n";
-    }
-    return pose_data;
-}
-
-inline void load_data_from_nvm(const std::string &filename, std::map<std::string, float> &focal_map, pcl::PointCloud<pcl::PointXYZRGB>::Ptr *cloud = nullptr) {
-    focal_map.clear();
     std::vector<CameraF> cameras;
     std::vector<Point3DF> points;
     std::vector<Point2D> measurements;
@@ -96,13 +66,29 @@ inline void load_data_from_nvm(const std::string &filename, std::map<std::string
     std::vector<int> ptc;
     lass::load_nvm_file(filename.c_str(), cameras, points, measurements, pidx, cidx, names, ptc);
     CHECK(cameras.size() == names.size());
+    CHECK(!cameras.empty());
     for (int i = 0; i < cameras.size(); ++i) {
-        std::string filename = names[i];
-        filename = filename.substr(0, filename.length() - 3) + "png";
-        focal_map[filename] = cameras[i].f;
+        const auto &c = cameras[i];
+        PoseData pd;
+        Eigen::Matrix3f R;
+        R << c.m[0][0], c.m[0][1], c.m[0][2],
+             c.m[1][0], c.m[1][1], c.m[1][2],
+             c.m[2][0], c.m[2][1], c.m[2][2];
+        Eigen::Vector3f t;
+        t << c.t[0], c.t[1], c.t[2];
+        pd.q = R.transpose();
+        pd.q.normalize();
+        pd.p = -(pd.q * t);
+        pd.focal = cameras[i].f;
+        pd.filename = names[i];
+        cv::Mat img = cv::imread(image_base_dir + "/" + pd.filename);
+        pd.width = img.cols;
+        pd.height = img.rows;
+        pose_data.emplace_back(std::move(pd));
+        printf("\r%d / %zu", i, cameras.size());
     }
     if (cloud) {
-        LOG(WARNING) << __func__ << " point coordinate abs > 1000 would be removed!";
+        LOG(WARNING) << __func__ << " point coordinate abs > 3000 would be removed!";
         for (int i = 0; i < points.size(); ++i) {
             pcl::PointXYZRGB pt;
             pt.x = points[i].xyz[0];
@@ -110,11 +96,13 @@ inline void load_data_from_nvm(const std::string &filename, std::map<std::string
             pt.z = points[i].xyz[2];
             float xxx = pt.x + pt.y + pt.z;
             if (std::isnan(xxx) || std::isinf(xxx)) continue;
-            if (std::abs(pt.x) > 1000 || std::abs(pt.y) > 1000 || std::abs(pt.z) > 1000) continue;
+            if (std::abs(pt.x) > 3000 || std::abs(pt.y) > 3000 || std::abs(pt.z) > 3000) continue;
             pt.r = pt.g = pt.b = 200;
             (*cloud)->points.push_back(pt);
         }
+        print_var(points.size());
     }
+    return pose_data;
 }
 
 inline void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr) {
@@ -124,7 +112,7 @@ inline void keyboard_callback(const pcl::visualization::KeyboardEvent &event, vo
     }
 }
 
-inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool visualize_trajectory = false) {
+inline void visualize_rgb_points(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, bool visualize_trajectory = true) {
     if (g_disbale_viewer) return;
     std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(cloud);
@@ -161,13 +149,13 @@ inline void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud,
             pt.r = 255;
             pt.g = pt.b = 0;
             centers_pcd->points.push_back(pt);
-            // pt.x = c.center_orig.x();
-            // pt.y = c.center_orig.y();
-            // pt.z = c.center_orig.z();
-            // pt.r = 0;
-            // pt.g = 0;
-            // pt.b = 255;
-            // centers_pcd->points.push_back(pt);
+            pt.x = c.center_orig.x();
+            pt.y = c.center_orig.y();
+            pt.z = c.center_orig.z();
+            pt.r = 0;
+            pt.g = 0;
+            pt.b = 255;
+            centers_pcd->points.push_back(pt);
         }
         pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
         viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
@@ -289,43 +277,7 @@ inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr p
 
 inline void point_process(const json &j_config, pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_pcd, pcl::PointCloud<pcl::PointXYZL>::Ptr &output_labeled_pcd, std::vector<Cluster> &centers) {
     auto &curr_pcd = input_pcd;
-    // uniform downsample
-    // {
-    //     pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
-    //     float downsample_ratio = j_config["downsample_ratio"];
-    //     for (int i = 0; i < curr_pcd->points.size(); ++i) {
-    //         if (rand01() > downsample_ratio) outliers->indices.push_back(i);
-    //     }
-    //     pcl::ExtractIndices<pcl::PointXYZRGB> extract;
-    //     extract.setInputCloud(curr_pcd);
-    //     extract.setIndices(outliers);
-    //     extract.setNegative(true);
-    //     extract.filter(*curr_pcd);
-    // }
-    // Statistical filtering outliers
-    // {
-    //     const float meanK = j_config["statical_filter"]["mean_K"];
-    //     const float stddev = j_config["statical_filter"]["stddev"];
-    //     pcl::PointCloud<PointXYZRGB>::Ptr cloud = curr_pcd;
-    //     pcl::PointCloud<PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<PointXYZRGB>);
-
-    //     LOG(INFO) << "Statistical filtering outliers..." << std::endl;
-    //     LOG(INFO) << stddev << ", " << meanK << std::endl;
-
-    //     StatisticalOutlierRemoval<PointXYZRGB> sor;
-    //     sor.setInputCloud(cloud);
-    //     sor.setMeanK(meanK);
-    //     sor.setStddevMulThresh(stddev);
-    //     // sor.setNegative(false);
-    //     sor.filter(*cloud_filtered);
-
-    //     LOG(INFO) << "before filtering:\tpoint number = " << curr_pcd->points.size() << endl;
-    //     LOG(INFO) << "after filtering:\tpoint number = " << cloud_filtered->points.size() << endl;
-    //     LOG(INFO) << "filtered number = " << curr_pcd->points.size() - cloud_filtered->points.size() << endl;
-    //     curr_pcd = cloud_filtered;
-    // }
-
-    visualize_rgb_points(curr_pcd);
+    // visualize_rgb_points(curr_pcd);
 
     pcl::PointCloud<PointXYZL>::Ptr curr_pcd_labeled(new pcl::PointCloud<PointXYZL>);
     curr_pcd_labeled->points.reserve(curr_pcd->points.size());
@@ -467,12 +419,7 @@ inline void dump_parameters(const std::string &output_base_dir,
 
 inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, std::vector<Cluster> &cluster_centers, double raycast_voxel_grid) {
     std::cout << __func__ << std::endl;
-    camera_intrinsics K;
-    const int resize_ratio_visibility = 4;
-    K.cx = 960 / resize_ratio_visibility;
-    K.cy = 540 / resize_ratio_visibility;
-    K.width = 1920 / resize_ratio_visibility;
-    K.height = 1080 / resize_ratio_visibility;
+    
 
     PointCloud<PointXYZL>::Ptr image_pcd{new PointCloud<PointXYZL>};
 
@@ -491,6 +438,15 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
 
     for (int idx_pose = 0; idx_pose < poses_twc.size(); ++idx_pose) {
         const auto &p = poses_twc[idx_pose];
+
+        // gt segmentation would be resized
+        const int resize_ratio_visibility = 8;
+        // set camera intrinsic
+        camera_intrinsics K;
+        K.cx = (p.width / 2) / resize_ratio_visibility;
+        K.cy = (p.height / 2) / resize_ratio_visibility;
+        K.width = p.width / resize_ratio_visibility;
+        K.height = p.height / resize_ratio_visibility;
         // set focal
         float focal = p.focal;
         focal /= resize_ratio_visibility;
@@ -546,109 +502,14 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     }
 }
 
-inline void load_sc_data(std::shared_ptr<float>& sc_data_ptr, const std::string& fn) {
-    CHECK(fs::exists(fn)) << fn << " not exists" << endl;
-
-    ifstream ifsc(fn, ios::binary);
-    ifsc.read((char *)(sc_data_ptr.get()), sizeof(float) * 3 * sc_width * sc_height);
-}
-
-inline void generate_labels_from_sc(const std::string &output_base_dir, const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::string& sc_data_dir) {
-    camera_intrinsics K;
-    K.cx = 960 / resize_ratio;
-    K.cy = 540 / resize_ratio;
-    K.width = 1920 / resize_ratio;
-    K.height = 1080 / resize_ratio;
-    CHECK(K.width == sc_width) << "size of sc data is inconsistent with size of request image: width " << K.width << " - " << sc_width << endl;
-    CHECK(K.height == sc_height) << "size of sc data is inconsistent with size of request image: height" << K.height << " - " << sc_height << endl;
-
-    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
-    cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
-    cv::Vec3b color;
-    pcl::PointXYZL point;
-    std::vector<int> point_indices(1);
-    std::vector<float> distances(1);
-
-    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
-    tree.setInputCloud(labeled_pcd);
-    std::shared_ptr<float> sc_data_ptr = std::make_shared<float>(sizeof(float) * 3 * sc_width * sc_height);
-
-    for (int i = 0; i < poses_twc.size(); ++i) {
-        const auto &pose = poses_twc[i];
-
-        std::string sc_fn = sc_data_dir + "/" + pose.filename;
-        sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
-        std::string save_img_fn = output_base_dir + "/" + pose.filename;
-        cout << "save image at: " << save_img_fn << endl;
-
-        // load_sc_data(sc_data_ptr, sc_fn);
-        for (int j = 0; j < K.height; j++) {
-            for (int i = 0; i < K.width; i++) {
-                cout << "r, c = " << j << ", " << i << endl;
-                int idx = j * K.width + i;
-                point.x = 0;
-                point.y = 0;
-                point.z = 0;
-                // point.x = sc_data_ptr.get()[idx * 3 + 0];
-                // point.y = sc_data_ptr.get()[idx * 3 + 1];
-                // point.z = sc_data_ptr.get()[idx * 3 + 2];
-
-                cout << "point: " << point << endl;
-
-                if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
-                    point.label = labeled_pcd->points[point_indices[0]].label;
-                } else {
-                    LOG(INFO) << "error: can not find nearest neighbor" << endl;
-                    exit(0);
-                }
-
-                cout << "1" << endl;
-                auto &c = save_img.at<cv::Vec3b>(j, i);
-                if (point.label == 0) {
-                    cout << "2" << endl;
-                    c[0] = c[1] = c[2] = 0;
-                } else {
-                    cout << "3" << endl;
-                    lass::label_to_rgb(c[0], c[1], c[2], point.label);
-                    cout << "4" << endl;
-                    {
-                        // debug scope
-                        // make sure each color map to only one label
-                        uint32_t unique_key = (uint32_t(c[0]) << 16) + (uint32_t(c[1]) << 8) + uint32_t(c[2]);
-                        static std::map<uint32_t, uint32_t> color_map;
-                        if (color_map.count(unique_key) > 0) {
-                            CHECK(color_map[unique_key] == point.label);
-                        } else {
-                            color_map[unique_key] = point.label;
-                        }
-                    }
-                }
-                cout << "5" << endl;
-            }
-        }
-        cv::imshow("raycast", save_img);
-        int ret = system(("mkdir -p " + save_img_fn.substr(0, save_img_fn.find_last_of("/"))).c_str());
-        // cv::imwrite(save_img_fn, save_img);
-        cv::waitKey(0);
-        fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
-        fflush(stdout);
-    }
-}
-
 inline void raycast_to_images(const json &j_config,
                               const std::string &output_base_dir,
                               const std::vector<PoseData> &poses_twc,
                               pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd,
                               const std::vector<Cluster> &cluster_centers) {
-    camera_intrinsics K;
-    K.cx = 960 / resize_ratio;
-    K.cy = 540 / resize_ratio;
-    K.width = 1920 / resize_ratio;
-    K.height = 1080 / resize_ratio;
     const float max_visible_distance = j_config.value("max_visible_distance", std::numeric_limits<float>::max());
 
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
-    cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
 
     auto mm = std::make_unique<MapManager>();
     mm->m_target_pcd = labeled_pcd;
@@ -667,7 +528,12 @@ inline void raycast_to_images(const json &j_config,
 
     for (int i = 0; i < poses_twc.size(); ++i) {
         const auto &p = poses_twc[i];
-        // set focal
+        // set camera intrinsic
+        camera_intrinsics K;
+        K.cx = (p.width / 2) / resize_ratio;
+        K.cy = (p.height / 2) / resize_ratio;
+        K.width = p.width / resize_ratio;
+        K.height = p.height / resize_ratio;
         float focal = p.focal;
         focal /= resize_ratio;
         K.fx = focal;
@@ -678,6 +544,7 @@ inline void raycast_to_images(const json &j_config,
         Tcw.block<3, 1>(0, 3) = -(p.q.conjugate() * p.p);
         PointCloud<PointXYZL>::Ptr visible_pcd{new PointCloud<PointXYZL>};
         mm->raycasting_pcd(Tcw, K, pcd, pcl_centers, true, 3, 1.0, "labeled", &visible_pcd);
+        cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
         save_img = 0;
         // draw to cv::Mat
         for (int j = 0; j < K.height; j++) {
@@ -710,6 +577,7 @@ inline void raycast_to_images(const json &j_config,
         std::string output_filename = output_base_dir + "/" + p.filename;
         // create directory if not exist
         int ret = system(("mkdir -p " + output_filename.substr(0, output_filename.find_last_of("/"))).c_str());
+        output_filename = output_filename.substr(0, output_filename.length() - 3) + "png";
         cv::imwrite(output_filename, save_img);
         // cv::waitKey(0);
         fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
@@ -785,7 +653,7 @@ void filter_out_bad_poses(const json &j_config, const std::string &data_base_dir
 
 int main(int argc, char **argv) {
     if (argc < 4) {
-        std::cerr << "Usage ./test_cambridge_landmark config_filename data_base_dir output_base_dir\n";
+        std::cerr << "Usage ./test_aachen_daynight config_filename data_base_dir output_base_dir\n";
         exit(-1);
     }
     const std::string config_filename(argv[1]);
@@ -800,17 +668,14 @@ int main(int argc, char **argv) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr curr_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr nvm_pcd(new pcl::PointCloud<pcl::PointXYZRGB>);
     // pcl::io::loadPLYFile(data_base_dir + "/" + std::string(j_config["ply"]), *curr_pcd);
-    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), 20000000, curr_pcd);
-    std::map<std::string, float> focal_map;
-    load_data_from_nvm(data_base_dir + "/reconstruction.nvm", focal_map, &nvm_pcd);
-    auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
-    auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
+    load_and_sample_obj(data_base_dir + "/" + std::string(j_config["obj"]), int(j_config["point_sample_size"]), curr_pcd);
+    auto poses_twc_train = load_camera_data_from_nvm(data_base_dir + "/" + std::string(j_config["image_base_dir"]), data_base_dir + "/" + std::string(j_config["nvm"]), &nvm_pcd);
+    decltype(poses_twc_train) poses_twc_test;
     double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
-    const std::string sc_data_dir(j_config["sc_data_dir"].get<std::string>());
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
-    filter_out_bad_poses(j_config, data_base_dir, poses_twc_all, curr_pcd);
+    // filter_out_bad_poses(j_config, data_base_dir, poses_twc_all, curr_pcd);
     for (const auto &p : poses_twc_train) {
         Eigen::Matrix4f Twc;
         Twc.setIdentity();
@@ -826,21 +691,20 @@ int main(int argc, char **argv) {
         g_Twcs_test.push_back(Twc);
     }
 
-    visualize_rgb_points(nvm_pcd);
-    visualize_rgb_points(curr_pcd);
+    // visualize_rgb_points(nvm_pcd);
+    // visualize_rgb_points(curr_pcd);
     // visualize_pcd(curr_pcd);
 
     pcl::PointCloud<pcl::PointXYZL>::Ptr labeled_pcd(new pcl::PointCloud<pcl::PointXYZL>);
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
-    // adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
+    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     int ret = system(("mkdir -p " + output_base_dir).c_str());
-    // dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
-    // raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
-    generate_labels_from_sc(output_base_dir, poses_twc_all, labeled_pcd, sc_data_dir);
+    dump_parameters(output_base_dir, cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
+    raycast_to_images(j_config, output_base_dir, poses_twc_all, labeled_pcd, cluster_centers);
     LOG(INFO) << "Finish All";
 
     return 0;
