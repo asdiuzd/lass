@@ -570,17 +570,24 @@ inline void generate_labels_from_sc(const std::vector<PoseData> &poses_twc, pcl:
     for (int i = 0; i < poses_twc.size(); ++i) {
         const auto &pose = poses_twc[i];
 
-        std::string sc_fn = sc_data_dir + pose.filename;
+        std::string sc_fn = sc_data_dir + "/" + pose.filename;
         sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
         std::string save_img_fn = folder_prefix + pose.filename;
+        cout << "save image at: " << save_img_fn << endl;
 
-        load_sc_data(sc_data_ptr, sc_fn);
+        // load_sc_data(sc_data_ptr, sc_fn);
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
+                cout << "r, c = " << j << ", " << i << endl;
                 int idx = j * K.width + i;
-                point.x = sc_data_ptr.get()[idx * 3 + 0];
-                point.y = sc_data_ptr.get()[idx * 3 + 1];
-                point.z = sc_data_ptr.get()[idx * 3 + 2];
+                point.x = 0;
+                point.y = 0;
+                point.z = 0;
+                // point.x = sc_data_ptr.get()[idx * 3 + 0];
+                // point.y = sc_data_ptr.get()[idx * 3 + 1];
+                // point.z = sc_data_ptr.get()[idx * 3 + 2];
+
+                cout << "point: " << point << endl;
 
                 if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
                     point.label = labeled_pcd->points[point_indices[0]].label;
@@ -589,11 +596,15 @@ inline void generate_labels_from_sc(const std::vector<PoseData> &poses_twc, pcl:
                     exit(0);
                 }
 
+                cout << "1" << endl;
                 auto &c = save_img.at<cv::Vec3b>(j, i);
                 if (point.label == 0) {
+                    cout << "2" << endl;
                     c[0] = c[1] = c[2] = 0;
                 } else {
+                    cout << "3" << endl;
                     lass::label_to_rgb(c[0], c[1], c[2], point.label);
+                    cout << "4" << endl;
                     {
                         // debug scope
                         // make sure each color map to only one label
@@ -606,11 +617,12 @@ inline void generate_labels_from_sc(const std::vector<PoseData> &poses_twc, pcl:
                         }
                     }
                 }
+                cout << "5" << endl;
             }
         }
-        // cv::imshow("raycast", save_img);
-        cv::imwrite(save_img_fn, save_img);
-        // cv::waitKey(0);
+        cv::imshow("raycast", save_img);
+        // cv::imwrite(save_img_fn, save_img);
+        cv::waitKey(0);
         fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
         fflush(stdout);
     }
@@ -738,10 +750,10 @@ int main(int argc, char **argv) {
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
-    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
+    // adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
-    dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
+    // dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
     // raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
     generate_labels_from_sc(poses_twc_all, labeled_pcd, sc_data_dir);
     LOG(INFO) << "Finish All";
