@@ -1,4 +1,5 @@
 #include <pcl/point_types.h>
+#include<experimental/filesystem>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/radius_outlier_removal.h>
@@ -8,6 +9,7 @@
 #include <pcl/segmentation/supervoxel_clustering.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <random>
 #include <thread>
@@ -20,10 +22,12 @@
 using namespace pcl;
 using namespace lass;
 using json = nlohmann::json;
+namespace fs = std::experimental::filesystem;
 
 namespace {
 bool g_stop_view = false;
 bool g_disbale_viewer = false;
+static const int sc_width = 1920 / 2, sc_height = 1080 / 2;
 
 const int resize_ratio = 2;
 
@@ -520,6 +524,93 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     }
 }
 
+inline void load_sc_data(std::shared_ptr<float>& sc_data_ptr, const std::string& fn) {
+    CHECK(fs::exists(fn)) << fn << " not exists" << endl;
+
+    ifstream ifsc(fn, ios::binary);
+    ifsc.read((char *)(sc_data_ptr.get()), sizeof(float) * 3 * sc_width * sc_height);
+}
+
+inline void generate_labels_from_sc(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::string& sc_data_dir) {
+
+    for (int i = 1; i < 25; ++i) {
+        std::string fname = folder_prefix + "seq" + std::to_string(i);
+        int ret = system(("mkdir -p " + fname).c_str());
+    }
+    int ret;
+    ret = system(("mkdir -p " + folder_prefix + "img").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_east").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_west").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_north").c_str());
+    ret = system(("mkdir -p " + folder_prefix + "img_south").c_str());
+    camera_intrinsics K;
+    K.cx = 960 / resize_ratio;
+    K.cy = 540 / resize_ratio;
+    K.width = 1920 / resize_ratio;
+    K.height = 1080 / resize_ratio;
+    CHECK(K.width == sc_width) << "size of sc data is inconsistent with size of request image: width " << K.width << " - " << sc_width << endl;
+    CHECK(K.height == sc_height) << "size of sc data is inconsistent with size of request image: height" << K.height << " - " << sc_height << endl;
+
+    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
+    cv::Mat save_img(cv::Size(K.width, K.height), CV_8UC3);
+    cv::Vec3b color;
+    pcl::PointXYZL point;
+    std::vector<int> point_indices(1);
+    std::vector<float> distances(1);
+
+    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
+    tree.setInputCloud(labeled_pcd);
+    std::shared_ptr<float> sc_data_ptr = std::make_shared<float>(sizeof(float) * 3 * sc_width * sc_height);
+
+    for (int i = 0; i < poses_twc.size(); ++i) {
+        const auto &pose = poses_twc[i];
+
+        std::string sc_fn = sc_data_dir + pose.filename;
+        sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
+        std::string save_img_fn = folder_prefix + pose.filename;
+
+        load_sc_data(sc_data_ptr, sc_fn);
+        for (int j = 0; j < K.height; j++) {
+            for (int i = 0; i < K.width; i++) {
+                int idx = j * K.width + i;
+                point.x = sc_data_ptr.get()[idx * 3 + 0];
+                point.y = sc_data_ptr.get()[idx * 3 + 1];
+                point.z = sc_data_ptr.get()[idx * 3 + 2];
+
+                if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
+                    point.label = labeled_pcd->points[point_indices[0]].label;
+                } else {
+                    LOG(INFO) << "error: can not find nearest neighbor" << endl;
+                    exit(0);
+                }
+
+                auto &c = save_img.at<cv::Vec3b>(j, i);
+                if (point.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                    lass::label_to_rgb(c[0], c[1], c[2], point.label);
+                    {
+                        // debug scope
+                        // make sure each color map to only one label
+                        uint32_t unique_key = (uint32_t(c[0]) << 16) + (uint32_t(c[1]) << 8) + uint32_t(c[2]);
+                        static std::map<uint32_t, uint32_t> color_map;
+                        if (color_map.count(unique_key) > 0) {
+                            CHECK(color_map[unique_key] == point.label);
+                        } else {
+                            color_map[unique_key] = point.label;
+                        }
+                    }
+                }
+            }
+        }
+        // cv::imshow("raycast", save_img);
+        cv::imwrite(save_img_fn, save_img);
+        // cv::waitKey(0);
+        fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
+        fflush(stdout);
+    }
+}
+
 inline void raycast_to_images(const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::vector<Cluster> &cluster_centers) {
     // create folders
     for (int i = 1; i < 25; ++i) {
@@ -616,6 +707,7 @@ int main(int argc, char **argv) {
     auto poses_twc_train = load_cambridge_pose_txt(data_base_dir + "/dataset_train.txt", focal_map);
     auto poses_twc_test = load_cambridge_pose_txt(data_base_dir + "/dataset_test.txt", focal_map);
     double raycast_voxel_grid = j_config["raycast_voxel_grid"].get<double>();
+    const std::string sc_data_dir(j_config["sc_data_dir"].get<std::string>());
 
     std::vector<PoseData> poses_twc_all = poses_twc_train;
     poses_twc_all.insert(poses_twc_all.end(), poses_twc_test.begin(), poses_twc_test.end());
@@ -640,7 +732,8 @@ int main(int argc, char **argv) {
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
-    raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
+    // raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
+    generate_labels_from_sc(poses_twc_all, labeled_pcd, sc_data_dir);
     LOG(INFO) << "Finish All";
 
     return 0;

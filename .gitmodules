@@ -1,0 +1,3 @@
+[submodule "3rdparty/gl_render"]
+	path = 3rdparty/gl_render
+	url = git@github.com:eugenelyj/gl_render.git

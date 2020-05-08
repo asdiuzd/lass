@@ -52,7 +52,7 @@ void load_and_sample_obj(const std::string& fn, const int sample_number, pcl::Po
 bool load_info_file(const char *fn, std::vector<Eigen::Matrix4f>& es);
 
 // load image name-index correspondences
-bool load_list_file(const char *fn, int n_cameras, std::vector<std::string>& image_fns, std::vector<int>& camera_types);
+bool load_list_file(const char *fn, int n_cameras, std::vector<std::string>& image_fns, std::vector<int>& camera_types, bool camera_type_valid=true);
 
 // load bin xyz
 bool load_bin_file(const char *fn, pcl::PointCloud<pcl::PointXYZ>::Ptr& pts);

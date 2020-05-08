@@ -39,3 +39,6 @@ target_link_libraries(cluster_reprojection_check)
 
 add_executable(test_cambridge_assign_voxel_label test_cambridge_assign_voxel_label.cc)
 target_link_libraries(test_cambridge_assign_voxel_label lass)
+
+add_executable(test_transfer_list test_transfer_list.cc)
+target_link_libraries(test_transfer_list lass)

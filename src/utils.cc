@@ -83,10 +83,17 @@ bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
     return true;
 }
 
-bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, vector<int>& camera_types) {
+bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, vector<int>& camera_types, bool camera_type_valid) {
     cout << "Start load list file" << endl;
     cout << n_cameras << endl;
     cout << fn << endl;
+
+    if (camera_type_valid) {
+        LOG(INFO) << "camera type enabled" << endl;
+    } else {
+        LOG(INFO) << "camera type disabled" << endl;
+    }
+
     ifstream ifs(fn);
 
     if (!ifs) {
@@ -94,23 +101,29 @@ bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, ve
         exit(0);
     }
     image_fns.resize(n_cameras);
-    camera_types.resize(n_cameras);
+    if (camera_type_valid) {
+        camera_types.resize(n_cameras);
+    }
     for (int idx = 0; idx < n_cameras; idx++) {
         string img_fn;
         ifs >> img_fn;
         fs::path p(img_fn);
-        if (img_fn.find("left") != string::npos) {
-            image_fns[idx] = string("left/") + fs::path(img_fn).filename().string();
-            camera_types[idx] = 0;
-        } else if (img_fn.find("rear") != string::npos) {
-            image_fns[idx] = string("rear/") + fs::path(img_fn).filename().string();
-            camera_types[idx] = 1;
-        } else if (img_fn.find("right") != string::npos) {
-            image_fns[idx] = string("right/") + fs::path(img_fn).filename().string();
-            camera_types[idx] = 2;
+        if (camera_type_valid) {
+            if (img_fn.find("left") != string::npos) {
+                image_fns[idx] = string("left/") + fs::path(img_fn).filename().string();
+                camera_types[idx] = 0;
+            } else if (img_fn.find("rear") != string::npos) {
+                image_fns[idx] = string("rear/") + fs::path(img_fn).filename().string();
+                camera_types[idx] = 1;
+            } else if (img_fn.find("right") != string::npos) {
+                image_fns[idx] = string("right/") + fs::path(img_fn).filename().string();
+                camera_types[idx] = 2;
+            } else {
+                cout << "Error !" << endl;
+                exit(0);
+            }
         } else {
-            cout << "Error !" << endl;
-            exit(0);
+            image_fns[idx] = img_fn;
         }
     }
 }

@@ -15,7 +15,8 @@ cd ../bin
 rm -rf cambridge_raycast
 rm -rf cambridge_all/${seq_name}
 
-for ((i=1;i<=25;i++)); do
+for ((i=1;i<=25;i++))
+do
     mkdir -p cambridge_raycast/seq$i
 done
 
