@@ -546,11 +546,11 @@ inline void adjust_cluster_centers_via_raycast_visibility(const std::vector<Pose
     }
 }
 
-inline void load_sc_data(std::shared_ptr<float>& sc_data_ptr, const std::string& fn) {
+inline void load_sc_data(float* sc_data_ptr, const std::string& fn) {
     CHECK(fs::exists(fn)) << fn << " not exists" << endl;
 
     ifstream ifsc(fn, ios::binary);
-    ifsc.read((char *)(sc_data_ptr.get()), sizeof(float) * 3 * sc_width * sc_height);
+    ifsc.read((char *)(sc_data_ptr), sizeof(float) * 3 * sc_width * sc_height);
 }
 
 inline void generate_labels_from_sc(const std::string &output_base_dir, const std::vector<PoseData> &poses_twc, pcl::PointCloud<pcl::PointXYZL>::Ptr &labeled_pcd, const std::string& sc_data_dir) {
@@ -571,7 +571,7 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
 
     pcl::KdTreeFLANN<pcl::PointXYZL> tree;
     tree.setInputCloud(labeled_pcd);
-    std::shared_ptr<float> sc_data_ptr = std::make_shared<float>(sizeof(float) * 3 * sc_width * sc_height);
+    float* sc_data_ptr = new float[sizeof(float) * 3 * sc_width * sc_height];
 
     for (int i = 0; i < poses_twc.size(); ++i) {
         const auto &pose = poses_twc[i];
@@ -581,36 +581,40 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
         std::string save_img_fn = output_base_dir + "/" + pose.filename;
         cout << "save image at: " << save_img_fn << endl;
 
-        // load_sc_data(sc_data_ptr, sc_fn);
+        load_sc_data(sc_data_ptr, sc_fn);
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
                 cout << "r, c = " << j << ", " << i << endl;
                 int idx = j * K.width + i;
-                point.x = 0;
-                point.y = 0;
-                point.z = 0;
-                // point.x = sc_data_ptr.get()[idx * 3 + 0];
-                // point.y = sc_data_ptr.get()[idx * 3 + 1];
-                // point.z = sc_data_ptr.get()[idx * 3 + 2];
+                // point.x = 0;
+                // point.y = 0;
+                // point.z = 0;
+                point.x = sc_data_ptr[idx * 3 + 0];
+                point.y = sc_data_ptr[idx * 3 + 1];
+                point.z = sc_data_ptr[idx * 3 + 2];
 
-                cout << "point: " << point << endl;
 
-                if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
-                    point.label = labeled_pcd->points[point_indices[0]].label;
+                if (point.x == 0 && point.y == 0 && point.z == 0) {
+                    point.label = 0;
                 } else {
-                    LOG(INFO) << "error: can not find nearest neighbor" << endl;
-                    exit(0);
+                    if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
+                        point.label = labeled_pcd->points[point_indices[0]].label;
+                    } else {
+                        LOG(INFO) << "error: can not find nearest neighbor" << endl;
+                        exit(0);
+                    }
                 }
 
-                cout << "1" << endl;
+                // cout << "point: " << point << endl;
+
                 auto &c = save_img.at<cv::Vec3b>(j, i);
                 if (point.label == 0) {
-                    cout << "2" << endl;
+                    // cout << "2" << endl;
                     c[0] = c[1] = c[2] = 0;
                 } else {
-                    cout << "3" << endl;
+                    // cout << "3" << endl;
                     lass::label_to_rgb(c[0], c[1], c[2], point.label);
-                    cout << "4" << endl;
+                    // cout << "4" << endl;
                     {
                         // debug scope
                         // make sure each color map to only one label
@@ -623,16 +627,18 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
                         }
                     }
                 }
-                cout << "5" << endl;
+                // cout << "5" << endl;
             }
         }
-        cv::imshow("raycast", save_img);
+        // cv::imshow("raycast", save_img);
         int ret = system(("mkdir -p " + save_img_fn.substr(0, save_img_fn.find_last_of("/"))).c_str());
-        // cv::imwrite(save_img_fn, save_img);
-        cv::waitKey(0);
+        cv::flip(save_img, save_img, 0);
+        cv::imwrite(save_img_fn, save_img);
+        // cv::waitKey(0);
         fprintf(stdout, "\r%d / %zu", i, poses_twc.size());
         fflush(stdout);
     }
+    delete sc_data_ptr;
 }
 
 inline void raycast_to_images(const json &j_config,
