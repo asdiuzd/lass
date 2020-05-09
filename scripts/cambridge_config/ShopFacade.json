@@ -10,5 +10,6 @@
     "supervoxel" : {
         "voxel_resolution" : 0.03,
         "seed_resolution" : 1.3
-    }
+    },
+    "sc_data_dir" : "/home/drinkingcoder/Documents/Code/gl_render/out/ShopFacade"
 }
