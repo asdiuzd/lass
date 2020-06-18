@@ -434,6 +434,174 @@ void test_ply(int argc, char** argv) {
 
 }
 
+void associate_sc_with_label() {
+
+}
+
+inline void load_sc_data(float* sc_data_ptr, const std::string& fn, int width, int height) {
+    CHECK(fs::exists(fn)) << fn << " not exists" << endl;
+
+    ifstream ifsc(fn, ios::binary);
+    ifsc.read((char *)(sc_data_ptr), sizeof(float) * 3 * width * height);
+}
+
+void test_ply_with_scene_coordinate(int argc, char** argv) {
+    /*
+        argv[1] - json fn
+     */
+    json j_input;
+    const char * json_fn = argv[1];
+    CHECK(fs::exists(json_fn)) << "json does not exist: " << json_fn << endl;
+    ifstream j_in(json_fn);
+    j_in >> j_input;
+
+    const string ply_path = j_input["model"].get<string>();
+    const string base_path = j_input["base_path"].get<string>();
+    const string scene = j_input["scene"].get<string>();
+    string target_path = (fs::path(j_input["target_path"].get<string>()) / scene).string();
+    const string parameters_output_fn = fs::path(target_path) / j_input["parameters_fn"].get<string>();
+    const float voxel_resolution = j_input["voxel_resolution"].get<float>();
+    const float seed_resolution = j_input["seed_resolution"].get<float>();
+    const string sc_data_dir = j_input["sc_data_dir"].get<std::string>();
+    json j_output;
+
+    // const char * target_path = target_path_str.c_str();
+
+    CHECK(fs::exists(ply_path)) << "model does not exist: " << ply_path << endl;
+    CHECK(fs::exists(base_path)) << "path does not exist: " << base_path << endl;
+    if (!fs::exists(target_path)) {
+        // fs::create_directory(target_path);
+        string cmd = "mkdir -p " + target_path;
+        if (system(cmd.c_str()) == -1) {
+            cout << "failed to create " << cmd << endl;
+            return;
+        }
+    }
+    CHECK(fs::exists(target_path)) << "path does not exist: " << target_path << endl;
+
+    const int scale = 1;
+    const int width = 640 / scale, height = 480 / scale;
+    // WARNING(ybbbbt): focal length for RGB: 520, for depth: 585
+    // float rgb_focal = 525;
+    float rgb_focal = 520;
+    const float fx = rgb_focal / scale, fy = rgb_focal / scale;
+    const float cx = 320 / scale, cy = 240 / scale;
+    const camera_intrinsics intrsinsics{
+        .cx = cx, .cy = cy, .fx = fx, .fy = fy, .width = width, .height = height
+    };
+    float *sc_data_ptr = new float[width * height * 3 * sizeof(float)];
+
+    vector<Eigen::Matrix4f> es;
+    vector<string> fns, relative_fns;
+
+    PolygonMesh mesh;
+    io::loadPLYFile(ply_path, mesh);
+
+    const int sample_number = 10000000;
+
+    auto mm = make_shared<MapManager>();
+    mm->load_and_sample_ply(ply_path, sample_number);
+    processing(mm, voxel_resolution, seed_resolution);
+
+    auto labeled_pcd = mm->m_target_pcd;
+    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
+    tree.setInputCloud(labeled_pcd);
+    std::vector<int> point_indices(1);
+    std::vector<float> distances(1);
+    PointXYZL point;
+    cout << "labeled pcd size = " << labeled_pcd->points.size() << endl;
+
+    PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
+
+    pcd->points.resize(width * height);
+    // cout << "pcd size 1  = " << pcd->points.size() << endl;
+
+    cv::Mat save_img(cv::Size(width, height), CV_8UC3);
+    vector<string> image_fns;
+
+    // load camera poses and file names
+    load_7scenes_poses(base_path, scene, es, fns, relative_fns, true, true);
+
+
+    vector<float> scores(mm->max_target_label, 0);
+    PointXYZL default_center;
+    default_center.x = default_center.y = default_center.z = default_center.label = 0;
+    vector<PointXYZL> centers(mm->max_target_label, default_center);
+    for (int idx = 0; idx < es.size(); idx++) {
+        LOG_IF(INFO, idx % 10 == 0) << idx << "/" << es.size() << endl;
+        Eigen::Matrix4f e = es[idx];
+        fs::path fn = fns[idx];
+        string image_fn;
+        std::string sc_fn = sc_data_dir + "/" + relative_fns[idx];
+        sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
+        // cout << "fn = " << fn << endl;
+        process_path(fn, target_path, image_fn);
+        // cout << "image fn = " << image_fn << endl;
+        // cout << "pcd size 2  = " << pcd->points.size() << endl;
+        load_sc_data(sc_data_ptr, sc_fn, width, height);
+        // cout << "pcd size 3  = " << pcd->points.size() << endl;
+        // cout << "sc_fn = " <<  sc_fn << endl;
+
+        // fix 7 scenes gt
+        // mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int idx = j * width + i;
+                // cout << "idx = " << idx << endl;
+                auto& point = pcd->points[idx];
+                // cout << "pcd size = " << pcd->points.size() << endl;
+                point.x = sc_data_ptr[idx * 3 + 0];
+                point.y = sc_data_ptr[idx * 3 + 1];
+                point.z = sc_data_ptr[idx * 3 + 2];
+                // cout << 2 << endl;
+
+                if (point.x == 0 && point.y == 0 && point.z == 0) {
+                    point.label = 0;
+                } else {
+                    if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
+                        point.label = labeled_pcd->points[point_indices[0]].label;
+                    } else {
+                        LOG(INFO) << "error: can not find nearest neighbor" << endl;
+                        exit(0);
+                    }
+                }
+
+                // cout << 3 << endl;
+                auto& c = save_img.at<cv::Vec3b>(j, i);
+                // cout << 4 << endl;
+                if (point.label == 0) {
+                    c[0] = c[1] = c[2] = 0;
+                } else {
+                // GroundColorMix(c[0], c[1], c[2], normalize_value(pt.label, 0, mm->max_target_label));
+                label_to_rgb(c[0], c[1], c[2], point.label);
+                }
+                // cout << 5 << endl;
+            }
+        }
+        update_candidate_list(pcd, scores, centers, width);
+
+        // string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
+        // cout << rgb_img_fn << endl;
+        // auto rgb_img = cv::imread(rgb_img_fn);
+        // cv::imwrite(image_fn, save_img);
+        // rgb_img = rgb_img / 2 + save_img / 2;
+        // cv::imshow("show", save_img);
+        // cv::imshow("rgb", rgb_img);
+        // cv::imwrite("show.png", save_img);
+        cout << "save to: " << image_fn << endl;
+        cv::flip(save_img, save_img, 0);
+        cv::imwrite(image_fn, save_img);
+        // cv::waitKey(0);
+    }
+
+    generate_centers(j_output["centers"], centers);
+    generate_es(j_output["camera_poses"], relative_fns, es);
+
+    // generate json
+    ofstream jout(parameters_output_fn);
+    jout << j_output.dump(4);
+}
+
 int main(int argc, char** argv) {
     /*
         argv[1] -- dataset path
@@ -441,7 +609,8 @@ int main(int argc, char** argv) {
      */
 
     // test_raycasting_7scenes(argc, argv);
-    test_ply(argc, argv);
+    // test_ply(argc, argv);
+    test_ply_with_scene_coordinate(argc, argv);
     // test_normalize_rotations(argc, argv);
     // test_rendered_depth();
     // PointCloud<PointXYZRGB>::Ptr pcd{new PointCloud<PointXYZRGB>};

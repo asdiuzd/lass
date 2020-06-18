@@ -215,7 +215,7 @@ inline void visualize_label_points_from_rgb(pcl::PointCloud<pcl::PointXYZRGB>::P
 }
 
 // remove too small clusters, compress labels, compute and return cluster centers
-inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr pcd, float small_cluster_thresh = 1.5) {
+inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr pcd, float small_cluster_thresh = 0.5) {
     // find too small clusters
     using min_max_pair = std::pair<Eigen::Vector3f, Eigen::Vector3f>;
     // label->min_max_pair
@@ -579,12 +579,13 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
         std::string sc_fn = sc_data_dir + "/" + pose.filename;
         sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
         std::string save_img_fn = output_base_dir + "/" + pose.filename;
-        cout << "save image at: " << save_img_fn << endl;
+        save_img_fn.replace(save_img_fn.end() - 3, save_img_fn.end(), "seg.png");
+        // cout << "save image at: " << save_img_fn << endl;
 
         load_sc_data(sc_data_ptr, sc_fn);
         for (int j = 0; j < K.height; j++) {
             for (int i = 0; i < K.width; i++) {
-                cout << "r, c = " << j << ", " << i << endl;
+                // t << "r, c = " << j << ", " << i << endl;
                 int idx = j * K.width + i;
                 // point.x = 0;
                 // point.y = 0;
@@ -840,11 +841,11 @@ int main(int argc, char **argv) {
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
-    // adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
+    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
     visualize_labeled_points(labeled_pcd, &cluster_centers);
     int ret = system(("mkdir -p " + output_base_dir).c_str());
-    // dump_parameters(cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
+    dump_parameters(output_base_dir, cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
     // raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);
     generate_labels_from_sc(output_base_dir, poses_twc_all, labeled_pcd, sc_data_dir);
     LOG(INFO) << "Finish All";

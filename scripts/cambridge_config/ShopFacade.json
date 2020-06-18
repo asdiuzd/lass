@@ -1,5 +1,5 @@
 {
-    "obj" : "ShopFacade.obj",
+    "obj" : "ShopFacade_clean.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 1.0,
     "raycast_voxel_grid": 0.12,
@@ -9,7 +9,7 @@
     },
     "supervoxel" : {
         "voxel_resolution" : 0.03,
-        "seed_resolution" : 1.3
+        "seed_resolution" : 0.8
     },
-    "sc_data_dir" : "/home/drinkingcoder/Documents/Code/gl_render/out/ShopFacade"
+    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/ShopFacade"
 }

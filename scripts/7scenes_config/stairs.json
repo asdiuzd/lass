@@ -5,5 +5,6 @@
     "seed_resolution": 0.3,
     "base_path": "/home/drinkingcoder/Dataset/7scenes/",
     "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",
-    "parameters_fn": "parameters.json"
+    "parameters_fn": "parameters.json",
+    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/stairs"
 }

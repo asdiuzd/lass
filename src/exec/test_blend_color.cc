@@ -80,13 +80,20 @@ int main(int argc, char **argv) {
         // std::cout << name << std::endl;
         cv::Mat img_src = cv::imread(dataset_base_dir + "/" + name.substr(0, name.length() - 3) + src_img_format);
         // cast (segmentation) format is always png
-        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name.substr(0, name.length() - 3) + "png");
+        cv::Mat img_cast = cv::imread(segmentation_base_dir + "/" + name.substr(0, name.length() - 3) + "seg.png");
         cv::Mat img_orig_seg = img_cast.clone();
         // blend color
         repaint_color(img_cast);
         double cx = img_src.cols / 2, cy = img_src.rows / 2;
         int new_width = img_src.cols / 2, new_height = img_src.rows / 2;
         auto sz = cv::Size(new_width, new_height);
+        // cout << "size: " << sz << endl;
+        // cout << "dataset_base_dir " << dataset_base_dir << endl;
+        // cout << "segmentation_base_dir " << segmentation_base_dir << endl;
+        // cout << "img src size: " << img_src.size() << endl;
+        // cout << "img cast size: " << img_cast.size() << endl;
+        // cout << "img orig seg size: " << img_orig_seg.size() << endl;
+        // cout << "segmentation path: " << segmentation_base_dir + "/" + name.substr(0, name.length() - 3) + "seg.png" << endl;
         cv::resize(img_src, img_src, sz);
         cv::resize(img_cast, img_cast, sz);
         cv::resize(img_orig_seg, img_orig_seg, sz);

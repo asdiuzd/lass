@@ -13,5 +13,5 @@
         "voxel_resolution" : 0.05,
         "seed_resolution" : 2.0
     },
-    "sc_data_dir" : "/home/drinkingcoder/Documents/Code/gl_render/out/Street"
+    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/Street"
 }
