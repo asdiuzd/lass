@@ -1,8 +1,8 @@
 {
     "model": "../../tsdf-fusion-python/chess.ply",
     "scene": "chess",
-    "voxel_resolution": 0.010,
-    "seed_resolution": 0.2,
+    "voxel_resolution": 0.005,
+    "seed_resolution": 0.15,
     "base_path": "/home/drinkingcoder/Dataset/7scenes/",
     "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",
     "parameters_fn": "parameters.json",

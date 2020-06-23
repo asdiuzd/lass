@@ -1,7 +1,7 @@
 {
     "model": "../../tsdf-fusion-python/fire.ply",
     "scene": "fire",
-    "voxel_resolution": 0.010,
+    "voxel_resolution": 0.005,
     "seed_resolution": 0.1,
     "base_path": "/home/drinkingcoder/Dataset/7scenes/",
     "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",

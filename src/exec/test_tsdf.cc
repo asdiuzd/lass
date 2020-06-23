@@ -17,6 +17,10 @@
 #include "MapManager.h"
 #include <bits/stdc++.h>
 
+namespace {
+
+bool g_disable_viewer = true;
+
 using namespace std;
 using namespace lass;
 using namespace pcl;
@@ -94,18 +98,25 @@ void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, floa
     for (int idx = 0; idx < mm->m_pcd->points.size(); idx++) {
         mm->m_index_of_landmark->indices[idx] = idx;
     }
-    // mm->update_view();
-    // mm->show_point_cloud();
+    
+    if (!g_disable_viewer) {
+        mm->update_view();
+        mm->show_point_cloud();
+    }
 
     mm->supervoxel_landmark_clustering(voxel_resolution, seed_resolution, 1.0, 0.0, 0.1);
     // mm->set_view_target_pcd(true);
-    // mm->update_view();
-    // mm->show_point_cloud();
+    if (!g_disable_viewer) {
+        mm->update_view();
+        mm->show_point_cloud();
+    }
     
     mm->filter_minor_segmentations(30);
     mm->m_pcd = mm->extract_points_from_supervoxel();
-    // mm->update_view();
-    // mm->show_point_cloud();
+    if (!g_disable_viewer) {
+        mm->update_view();
+        mm->show_point_cloud();
+    }
 }
 
 void visualize_centers(json& j_output, shared_ptr<MapManager>& mm) {
@@ -600,6 +611,7 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
     // generate json
     ofstream jout(parameters_output_fn);
     jout << j_output.dump(4);
+}
 }
 
 int main(int argc, char** argv) {
