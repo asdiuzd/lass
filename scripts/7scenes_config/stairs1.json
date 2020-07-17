@@ -1,8 +1,8 @@
 {
     "model": "../../tsdf-fusion-python/stairs_clean_v2.ply",
-    "scene": "stairs",
-    "voxel_resolution": 0.010,
-    "seed_resolution": 0.15,
+    "scene": "stairs05",
+    "voxel_resolution": 0.005,
+    "seed_resolution": 0.10,
     "base_path": "/home/drinkingcoder/Dataset/7scenes/",
     "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",
     "parameters_fn": "parameters.json",

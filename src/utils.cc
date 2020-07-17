@@ -263,7 +263,7 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
     fs::path base_path_str{base_path};
     string scene_str(scene), trainingset("TrainSplit.txt"), testset("TestSplit.txt");
     int frame_number;
-    if (scene.compare("stairs") == 0) {
+    if (scene.find("stairs") != std::string::npos) {
         frame_number = 500;
     } else {
         frame_number = 1000;
@@ -310,6 +310,7 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
             // q.normalize();
             // e.block(0, 0, 3, 3) = q.conjugate().toRotationMatrix();
             // e.block(0, 3, 3, 1) = - (q.conjugate() * e.block(0, 3, 3, 1));
+            e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + Eigen::Vector3f(0.0245, 0, 0);
             e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).inverse();
             // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).transpose();
             e.block(0, 3, 3, 1) = - (e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
