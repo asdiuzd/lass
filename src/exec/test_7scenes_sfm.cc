@@ -49,6 +49,7 @@ void find_label_by_uv(PointCloud<PointXYZL>::Ptr center_pcd, PointCloud<PointXYZ
         p = p / p.z();
         u[i] = p.x() * focal + cx;
         v[i] = p.y() * focal + cy;
+        v[i] = 479 - v[i];
     }
 
     for (int j = 0; j < height; j++) {
@@ -634,6 +635,7 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
         std::string sc_fn = sc_data_dir + "/" + relative_fns[idx];
         vector<int> valid_idx(height * width, 0);
         PointCloud<PointXYZL>::Ptr valid_center_pcd{new PointCloud<PointXYZL>()};
+        PointCloud<PointXYZL>::Ptr find_center_pcd{new PointCloud<PointXYZL>()};
         sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
         // cout << "fn = " << fn << endl;
         process_path(fn, target_path, image_fn);
@@ -642,7 +644,8 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
         load_sc_data(sc_data_ptr, sc_fn, width, height);
         // cout << "pcd size 3  = " << pcd->points.size() << endl;
         // cout << "sc_fn = " <<  sc_fn << endl;
-
+        
+        int img_idx = idx;
         // fix 7 scenes gt
         // mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
         for (int j = 0; j < height; j++) {
@@ -655,12 +658,44 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
                 point.y = sc_data_ptr[idx * 3 + 1];
                 point.z = sc_data_ptr[idx * 3 + 2];
                 // cout << 2 << endl;
+                // if(img_idx == 0 && i == 100 && j == 100)
+                // {
+                //     printf("x: %f, y: %f, z %f\n", point.x, point.y, point.z);
+                //     exit(0);
+                // }
+                point.label = 1;
+                // labeled_pcd->points.push_back(point);
+                // center_pcd->points.push_back(point);
+
 
                 if (point.x == 0 && point.y == 0 && point.z == 0) {
                     valid_idx[idx] = 0;
                 } else {
                     if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
                         valid_idx[idx] = center_pcd->points[point_indices[0]].label;
+                        // find_center_pcd->points.push_back(center_pcd->points[point_indices[0]]);
+
+                        // // auto& c = center_pcd->points[valid_idx[idx]];
+                        // auto& c = point; 
+                        // Eigen::Vector3f p(c.x, c.y, c.z);
+                        // // // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + Eigen::Vector3f(0.0245, 0, 0);
+                        // // // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).inverse();
+                        // // // // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).transpose();
+                        // // e.block(0, 3, 3, 1) = - (e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
+                        // p = e.block<3, 3>(0, 0) * p + e.block<3, 1>(0, 3);
+                        // // std::cout << e << std::endl;
+                        // // exit(0);
+                        // p = p / p.z();
+                        // static float focal = 520, cx = 320, cy = 240;
+                        // int u = p.x() * focal + cx;
+                        // int v = p.y() * focal + cy;
+                        // cv::Mat tvec, rvec;
+                        // Rodrigues(e.block(0, 0, 3, 3), rvec);
+                        // Rodrigues(e.block(0, 3, 3, 1), tvec);
+                        // vector<Eigen::Vector3f> ps;
+                        // ps.push_back(p);
+                        // projectPoints()
+                        // printf("u: %d, v: %d, i: %d, j: %d, distances: %f\n", u, 479 - v, i, j, distances[0]);
                     } else {
                         LOG(INFO) << "error: can not find nearest neighbor" << endl;
                         exit(0);
@@ -671,6 +706,11 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
 
 
         find_label_by_uv(center_pcd, pcd, valid_idx, e);
+        // visualize_pcd(labeled_pcd);
+        // visualize_pcd(center_pcd);
+        // visualize_pcd(find_center_pcd);
+        // visualize_pcd(pcd);
+
         /*
         for (auto& idx: valid_idx) {
             valid_center_pcd->points.push_back(centers[idx]);
