@@ -51,3 +51,9 @@ target_link_libraries(test_pnp_draw_figure lass)
 
 add_executable(test_transfer_list test_transfer_list.cc)
 target_link_libraries(test_transfer_list lass)
+
+add_executable(test_sfm_7scenes test_sfm_7scenes.cc)
+target_link_libraries(test_sfm_7scenes lass)
+
+add_executable(viz_seq viz_seq.cc)
+target_link_libraries(viz_seq lass)
