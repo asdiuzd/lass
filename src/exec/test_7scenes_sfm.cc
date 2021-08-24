@@ -11,6 +11,7 @@
 #include <pcl/io/ply_io.h>
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 #include "mesh_sampling.h"
+#include <set>
 
 #include "json.h"
 #include "utils.h"
@@ -27,6 +28,88 @@ using namespace pcl;
 using namespace cv;
 namespace fs = std::experimental::filesystem;
 using json = nlohmann::json;
+
+void find_label_by_uv(PointCloud<PointXYZL>::Ptr center_pcd, PointCloud<PointXYZL>::Ptr pcd, vector<int>& valid_idx, Eigen::Matrix4f e) {
+    const static float focal = 520, cx = 320, cy = 240;
+    const static int width = 640, height = 480;
+
+    auto& vec = valid_idx;
+    set<int> s(vec.begin(), vec.end());
+    vec.assign(s.begin(), s.end());
+
+    vector<float> u(valid_idx.size());
+    vector<float> v(valid_idx.size());
+
+    for (int i = 0; i < valid_idx.size(); i++) {
+        auto& c = center_pcd->points[valid_idx[i]];
+//        cout << valid_idx[i] << ", " << c.label << endl;
+        Eigen::Vector3f p(c.x, c.y, c.z);
+
+        p = e.block<3, 3>(0, 0) * p + e.block<3, 1>(0, 3);
+        p = p / p.z();
+        u[i] = p.x() * focal + cx;
+        v[i] = p.y() * focal + cy;
+        v[i] = 479 - v[i];
+    }
+
+    for (int j = 0; j < height; j++) {
+        for (int i = 0; i < width; i++) {
+            int idx = j * width + i;
+            auto& pt = pcd->points[idx];
+
+            float nn_dis = 1000000000;
+            for (int k = 0; k < valid_idx.size(); k++) {
+                float dis = std::pow(u[k] - i, 2) + std::pow(v[k] - j, 2);
+
+                if (dis < nn_dis) {
+                    nn_dis = dis;
+                    pt.label = valid_idx[k];
+                }
+            }
+        }
+    }
+}
+
+void find_default_centers(PointCloud<PointXYZL>::Ptr center_pcd, PointCloud<PointXYZL>::Ptr labeled_pcd) {
+    auto& centers = center_pcd->points;
+    vector<int> count(centers.size(), 0);
+
+    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
+    tree.setInputCloud(labeled_pcd);
+    std::vector<int> point_indices(1);
+    std::vector<float> distances(1);
+
+    for (auto& pt: labeled_pcd->points) {
+        auto& c = centers[pt.label];
+
+        count[pt.label] += 1;
+        c.x += pt.x;
+        c.y += pt.y;
+        c.z += pt.z;
+    }
+
+    for (int idx = 0; idx < centers.size(); idx++) {
+        if (count[idx] == 0) {
+            cout << "count = 0 at index: " << idx <<endl;
+            continue;
+        }
+
+        auto& c = centers[idx];
+        c.x /= count[idx];
+        c.y /= count[idx];
+        c.z /= count[idx];
+        c.label = idx;
+
+        if (tree.nearestKSearch(c, 1, point_indices, distances) > 0) {
+            auto& pt = labeled_pcd->points[point_indices[0]];
+            c.x = pt.x;
+            c.y = pt.y;
+            c.z = pt.z;
+        } else {
+            cout << "Alert! do not get it!" << endl;
+        }
+    }
+}
 
 void generate_centers(json& j, vector<PointXYZL>& centers) {
     LOG(INFO) << centers.size() << endl;
@@ -92,7 +175,7 @@ void process_path(fs::path& fn, const string& target_path, string& output_fn) {
     output_fn = target_fn.string();
 }
 
-void processing(std::shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, float seed_resolution = 0.4) {
+void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, float seed_resolution = 0.4) {
     mm->m_index_of_landmark = PointIndices::Ptr{new PointIndices};
     mm->m_index_of_landmark->indices.resize(mm->m_pcd->points.size());
     for (int idx = 0; idx < mm->m_pcd->points.size(); idx++) {
@@ -119,7 +202,7 @@ void processing(std::shared_ptr<MapManager>& mm, float voxel_resolution = 0.015,
     }
 }
 
-void visualize_centers(json& j_output, std::shared_ptr<MapManager>& mm) {
+void visualize_centers(json& j_output, shared_ptr<MapManager>& mm) {
     PointCloud<PointXYZL>::Ptr center_cloud{new PointCloud<PointXYZL>};
     for (int idx = 0; idx < j_output["centers"].size(); idx++) {
         PointXYZL pt;
@@ -182,7 +265,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     load_7scenes_poses(base_path, scene, es, fns, relative_fns);
 
     // process map
-    auto mm = std::make_shared<MapManager>();
+    auto mm = make_shared<MapManager>();
 #if 1  // set 1 to disable viewer, for batch generation
     mm->m_disable_viewer = true;
 #endif
@@ -336,7 +419,7 @@ void test_ply(int argc, char** argv) {
 
     const int sample_number = 10000000;
 
-    auto mm = std::make_shared<MapManager>();
+    auto mm = make_shared<MapManager>();
     mm->load_and_sample_ply(ply_path, sample_number);
     processing(mm, voxel_resolution, seed_resolution);
 
@@ -510,13 +593,12 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
 
     const int sample_number = 10000000;
 
-    auto mm = std::make_shared<MapManager>();
+    auto mm = make_shared<MapManager>();
     mm->load_and_sample_ply(ply_path, sample_number);
     processing(mm, voxel_resolution, seed_resolution);
 
     auto labeled_pcd = mm->m_target_pcd;
     pcl::KdTreeFLANN<pcl::PointXYZL> tree;
-    tree.setInputCloud(labeled_pcd);
     std::vector<int> point_indices(1);
     std::vector<float> distances(1);
     PointXYZL point;
@@ -535,15 +617,25 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
 
 
     vector<float> scores(mm->max_target_label, 0);
+    PointCloud<PointXYZL>::Ptr center_pcd{new PointCloud<PointXYZL>()};
+    auto& center_points = center_pcd->points;
     PointXYZL default_center;
     default_center.x = default_center.y = default_center.z = default_center.label = 0;
-    vector<PointXYZL> centers(mm->max_target_label, default_center);
+    center_points.resize(mm->max_target_label, default_center);
+    find_default_centers(center_pcd, labeled_pcd);
+    tree.setInputCloud(center_pcd);
+
+    vector<PointXYZL> centers(center_points.begin(), center_points.end());
+
     for (int idx = 0; idx < es.size(); idx++) {
         LOG_IF(INFO, idx % 10 == 0) << idx << "/" << es.size() << endl;
         Eigen::Matrix4f e = es[idx];
         fs::path fn = fns[idx];
         string image_fn;
         std::string sc_fn = sc_data_dir + "/" + relative_fns[idx];
+        vector<int> valid_idx(height * width, 0);
+        PointCloud<PointXYZL>::Ptr valid_center_pcd{new PointCloud<PointXYZL>()};
+        PointCloud<PointXYZL>::Ptr find_center_pcd{new PointCloud<PointXYZL>()};
         sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
         // cout << "fn = " << fn << endl;
         process_path(fn, target_path, image_fn);
@@ -552,7 +644,8 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
         load_sc_data(sc_data_ptr, sc_fn, width, height);
         // cout << "pcd size 3  = " << pcd->points.size() << endl;
         // cout << "sc_fn = " <<  sc_fn << endl;
-
+        
+        int img_idx = idx;
         // fix 7 scenes gt
         // mm->raycasting_pcd(e, intrsinsics, pcd, std::vector<pcl::PointXYZRGB>(), false);
         for (int j = 0; j < height; j++) {
@@ -565,20 +658,75 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
                 point.y = sc_data_ptr[idx * 3 + 1];
                 point.z = sc_data_ptr[idx * 3 + 2];
                 // cout << 2 << endl;
+                // if(img_idx == 0 && i == 100 && j == 100)
+                // {
+                //     printf("x: %f, y: %f, z %f\n", point.x, point.y, point.z);
+                //     exit(0);
+                // }
+                point.label = 1;
+                // labeled_pcd->points.push_back(point);
+                // center_pcd->points.push_back(point);
+
 
                 if (point.x == 0 && point.y == 0 && point.z == 0) {
-                    point.label = 0;
+                    valid_idx[idx] = 0;
                 } else {
                     if (tree.nearestKSearch(point, 1, point_indices, distances) > 0) {
-                        point.label = labeled_pcd->points[point_indices[0]].label;
+                        valid_idx[idx] = center_pcd->points[point_indices[0]].label;
+                        // find_center_pcd->points.push_back(center_pcd->points[point_indices[0]]);
+
+                        // // auto& c = center_pcd->points[valid_idx[idx]];
+                        // auto& c = point; 
+                        // Eigen::Vector3f p(c.x, c.y, c.z);
+                        // // // e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + Eigen::Vector3f(0.0245, 0, 0);
+                        // // // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).inverse();
+                        // // // // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).transpose();
+                        // // e.block(0, 3, 3, 1) = - (e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
+                        // p = e.block<3, 3>(0, 0) * p + e.block<3, 1>(0, 3);
+                        // // std::cout << e << std::endl;
+                        // // exit(0);
+                        // p = p / p.z();
+                        // static float focal = 520, cx = 320, cy = 240;
+                        // int u = p.x() * focal + cx;
+                        // int v = p.y() * focal + cy;
+                        // cv::Mat tvec, rvec;
+                        // Rodrigues(e.block(0, 0, 3, 3), rvec);
+                        // Rodrigues(e.block(0, 3, 3, 1), tvec);
+                        // vector<Eigen::Vector3f> ps;
+                        // ps.push_back(p);
+                        // projectPoints()
+                        // printf("u: %d, v: %d, i: %d, j: %d, distances: %f\n", u, 479 - v, i, j, distances[0]);
                     } else {
                         LOG(INFO) << "error: can not find nearest neighbor" << endl;
                         exit(0);
                     }
                 }
+            }
+        }
 
+
+        find_label_by_uv(center_pcd, pcd, valid_idx, e);
+        // visualize_pcd(labeled_pcd);
+        // visualize_pcd(center_pcd);
+        // visualize_pcd(find_center_pcd);
+        // visualize_pcd(pcd);
+
+        /*
+        for (auto& idx: valid_idx) {
+            valid_center_pcd->points.push_back(centers[idx]);
+            pcd->points.push_back(centers[idx]);
+        }
+
+        visualize_pcd(valid_center_pcd);
+        visualize_pcd(pcd);
+        */
+
+        for (int j = 0; j < height; j++) {
+            for (int i = 0; i < width; i++) {
+                int idx = j * width + i;
                 // cout << 3 << endl;
                 auto& c = save_img.at<cv::Vec3b>(j, i);
+                auto& point = pcd->points[idx];
                 // cout << 4 << endl;
                 if (point.label == 0) {
                     c[0] = c[1] = c[2] = 0;
@@ -589,8 +737,6 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
                 // cout << 5 << endl;
             }
         }
-        update_candidate_list(pcd, scores, centers, width);
-        visualize_pcd(pcd);
 
         // string rgb_img_fn = fn.parent_path() / (fn.filename().stem().stem().string() + ".color.png");
         // cout << rgb_img_fn << endl;

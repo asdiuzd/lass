@@ -1,0 +1,1 @@
+../bin/viz_seq ./7scenes_config/office_sfm.json
