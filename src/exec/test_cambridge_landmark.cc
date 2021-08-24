@@ -25,8 +25,8 @@ using json = nlohmann::json;
 namespace fs = std::experimental::filesystem;
 
 namespace {
-bool g_stop_view = false;
-bool g_disbale_viewer = false;
+bool g_stop_view = true;
+bool g_disbale_viewer = true;
 static const int sc_width = 1920 / 2, sc_height = 1080 / 2;
 
 const int resize_ratio = 2;

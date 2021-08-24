@@ -92,7 +92,7 @@ void process_path(fs::path& fn, const string& target_path, string& output_fn) {
     output_fn = target_fn.string();
 }
 
-void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, float seed_resolution = 0.4) {
+void processing(std::shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, float seed_resolution = 0.4) {
     mm->m_index_of_landmark = PointIndices::Ptr{new PointIndices};
     mm->m_index_of_landmark->indices.resize(mm->m_pcd->points.size());
     for (int idx = 0; idx < mm->m_pcd->points.size(); idx++) {
@@ -119,7 +119,7 @@ void processing(shared_ptr<MapManager>& mm, float voxel_resolution = 0.015, floa
     }
 }
 
-void visualize_centers(json& j_output, shared_ptr<MapManager>& mm) {
+void visualize_centers(json& j_output, std::shared_ptr<MapManager>& mm) {
     PointCloud<PointXYZL>::Ptr center_cloud{new PointCloud<PointXYZL>};
     for (int idx = 0; idx < j_output["centers"].size(); idx++) {
         PointXYZL pt;
@@ -182,7 +182,7 @@ void test_raycasting_7scenes(int argc, char** argv) {
     load_7scenes_poses(base_path, scene, es, fns, relative_fns);
 
     // process map
-    auto mm = make_shared<MapManager>();
+    auto mm = std::make_shared<MapManager>();
 #if 1  // set 1 to disable viewer, for batch generation
     mm->m_disable_viewer = true;
 #endif
@@ -336,7 +336,7 @@ void test_ply(int argc, char** argv) {
 
     const int sample_number = 10000000;
 
-    auto mm = make_shared<MapManager>();
+    auto mm = std::make_shared<MapManager>();
     mm->load_and_sample_ply(ply_path, sample_number);
     processing(mm, voxel_resolution, seed_resolution);
 
@@ -510,7 +510,7 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
 
     const int sample_number = 10000000;
 
-    auto mm = make_shared<MapManager>();
+    auto mm = std::make_shared<MapManager>();
     mm->load_and_sample_ply(ply_path, sample_number);
     processing(mm, voxel_resolution, seed_resolution);
 
