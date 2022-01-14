@@ -8,8 +8,8 @@ if [ $# -eq 1 ]
     seq_name=$1
 fi
 #dataset_base_dir=~/Data/cambridge/
-dataset_base_dir=~/Dataset/CambridgeLandmarks/
-output_base_dir=./cambridge_all/
+dataset_base_dir=/home/zhouhan/data/code/computer-vision/visual-localization/gl_render_cambridge/out
+output_base_dir=/home/zhouhan/data/code/computer-vision/visual-localization/lass_backup/cambridge_all
 
 cd ../bin
 
@@ -28,4 +28,4 @@ if [ "$run_blend_color" = true ] ; then
 fi
 
 # remove empty folders
-find ./cambridge_all/${seq_name}/ -type d -empty -delete
+# find ./cambridge_all/${seq_name}/ -type d -empty -delete

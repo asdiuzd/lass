@@ -38,16 +38,16 @@ struct PoseData {
     float focal;
 };
 
-struct Cluster {
-    Cluster() {
-        center.setZero();
-        center_orig.setZero();
-        max_visible_pixel = 0;
-    }
-    Eigen::Vector3f center;
-    Eigen::Vector3f center_orig;
-    int max_visible_pixel;
-};
+// struct Cluster {
+//     Cluster() {
+//         center.setZero();
+//         center_orig.setZero();
+//         max_visible_pixel = 0;
+//     }
+//     Eigen::Vector3f center;
+//     Eigen::Vector3f center_orig;
+//     int max_visible_pixel;
+// };
 
 std::vector<Eigen::Matrix4f> g_Twcs_train;
 std::vector<Eigen::Matrix4f> g_Twcs_test;
@@ -572,7 +572,7 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
     pcl::KdTreeFLANN<pcl::PointXYZL> tree;
     tree.setInputCloud(labeled_pcd);
     float* sc_data_ptr = new float[sizeof(float) * 3 * sc_width * sc_height];
-
+    cout << "size:" << poses_twc.size() << endl;
     for (int i = 0; i < poses_twc.size(); ++i) {
         const auto &pose = poses_twc[i];
 
@@ -580,7 +580,7 @@ inline void generate_labels_from_sc(const std::string &output_base_dir, const st
         sc_fn.replace(sc_fn.end() - 3, sc_fn.end(), "bin");
         std::string save_img_fn = output_base_dir + "/" + pose.filename;
         save_img_fn.replace(save_img_fn.end() - 3, save_img_fn.end(), "seg.png");
-        // cout << "save image at: " << save_img_fn << endl;
+        cout << "save image at: " << save_img_fn << endl;
 
         load_sc_data(sc_data_ptr, sc_fn);
         for (int j = 0; j < K.height; j++) {
@@ -798,6 +798,11 @@ int main(int argc, char **argv) {
     const std::string config_filename(argv[1]);
     const std::string data_base_dir(argv[2]);
     const std::string output_base_dir(argv[3]);
+
+    cout << config_filename << endl;
+    cout << data_base_dir << endl;
+    cout << output_base_dir << endl;
+
     // load config
     std::ifstream ifs(config_filename);
     json j_config;
@@ -841,9 +846,9 @@ int main(int argc, char **argv) {
     std::vector<Cluster> cluster_centers;
     point_process(j_config, curr_pcd, labeled_pcd, cluster_centers);
 
-    adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
+    // adjust_cluster_centers_via_raycast_visibility(poses_twc_all, labeled_pcd, cluster_centers, raycast_voxel_grid);
 
-    visualize_labeled_points(labeled_pcd, &cluster_centers);
+    // visualize_labeled_points(labeled_pcd, &cluster_centers);
     int ret = system(("mkdir -p " + output_base_dir).c_str());
     dump_parameters(output_base_dir, cluster_centers, poses_twc_train, poses_twc_test, poses_twc_all);
     // raycast_to_images(poses_twc_all, labeled_pcd, cluster_centers);

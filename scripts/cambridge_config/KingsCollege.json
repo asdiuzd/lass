@@ -1,5 +1,5 @@
 {
-    "obj" : "kingscollege.obj",
+    "obj" : "KingsCollege.obj",
     "ply" : "fused_clear.ply",
     "downsample_ratio": 0.3,
     "raycast_voxel_grid": 0.08,
@@ -11,5 +11,5 @@
         "voxel_resolution" : 0.03,
         "seed_resolution" : 2.0
     },
-    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/KingsCollege"
+    "sc_data_dir" : "/home/zhouhan/data/code/computer-vision/visual-localization/gl_render_cambridge/out/KingsCollege"
 }

@@ -21,6 +21,19 @@ typedef struct camera_intrinsics {
     int width, height;
 } camera_intrinsics;
 
+struct Cluster {
+    Cluster() {
+        center.setZero();
+        center_orig.setZero();
+        max_visible_pixel = 0;
+    }
+    Eigen::Vector3f center;
+    Eigen::Vector3f center_orig;
+    Eigen::Vector3f bbox_min;
+    Eigen::Vector3f bbox_max;
+    int max_visible_pixel;
+};
+
 class MapManager {
 private:
     static const std::string model_name;
@@ -38,6 +51,7 @@ public:
     std::vector<LandmarkType>               m_landmark_label;
     std::vector<pcl::PointIndices>          m_clusters;
     std::vector<int>                        m_cluster_label;
+    std::vector<Cluster>                    m_centers;
     pcl::PointIndices::Ptr                  m_index_of_landmark, m_index_of_background, m_index_of_removed, m_index_of_unknown;
     pcl::octree::OctreePointCloudSearch<pcl::PointXYZL> m_octree;
 
@@ -89,6 +103,7 @@ public:
     void grid_landmark_clustering();
     void euclidean_landmark_clustering();
     void supervoxel_landmark_clustering(float voxel_resolution = 1.0, float seed_resolution = 21.0, float spatial_importance = 1, float color_importance = 0, float normal_importance = 0);
+    std::vector<Cluster> reform_labeled_pcd(float small_cluster_thresh = 0.5);
     // @brief assgin supervoxel label to m_pcd via nearest neighbors
     void assign_supervoxel_label_to_filtered_pcd();
 

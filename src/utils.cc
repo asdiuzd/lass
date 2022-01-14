@@ -1,8 +1,8 @@
 #include <pcl/filters/statistical_outlier_removal.h>
-#include<experimental/filesystem>
-#include<opencv2/opencv.hpp>
-#include<omp.h>
-#include<Eigen/Eigen>
+#include <experimental/filesystem>
+#include <opencv2/opencv.hpp>
+#include <omp.h>
+#include <Eigen/Eigen>
 #include <pcl/io/ply_io.h>
 #include <pcl/surface/vtk_smoothing/vtk_utils.h>
 
@@ -19,22 +19,22 @@ namespace lass {
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud, const string vn) {
     pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer.showCloud(cloud);
-    while(!viewer.wasStopped()){}
+    while (!viewer.wasStopped()) {}
 }
 
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const string vn) {
     pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer.showCloud(cloud);
-    while(!viewer.wasStopped()){}
+    while (!viewer.wasStopped()) {}
 }
 
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const string vn) {
-    pcl::visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer);                                // viewer
+    pcl::visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer); // viewer
     // pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer->addPointCloud(cloud, "target_pcd");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
-    while(!viewer->wasStopped()){
+    while (!viewer->wasStopped()) {
         viewer->spinOnce(100);
     }
 }
@@ -42,10 +42,40 @@ void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const string vn) 
 void visualize_pcd(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const string vn) {
     pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer.showCloud(cloud);
-    while(!viewer.wasStopped()){}
+    while (!viewer.wasStopped()) {}
 }
 
-bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
+void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<lass::Cluster> &cluster) {
+    // pcl::visualization::CloudViewer viewer(vn.c_str());
+    // viewer.showCloud(cloud);
+    // while (!viewer.wasStopped()) {}
+
+    pcl::visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer); // viewer
+    // pcl::visualization::CloudViewer viewer(vn.c_str());
+    viewer->addPointCloud(cloud, "target_pcd");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
+
+    pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
+    for (const auto &c : cluster) {
+        pcl::PointXYZRGB pt;
+        pt.x = c.center.x();
+        pt.y = c.center.y();
+        pt.z = c.center.z();
+        pt.r = 255;
+        pt.g = pt.b = 0;
+        centers_pcd->points.push_back(pt);
+    }
+    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
+    viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "center_cloud");
+
+    while (!viewer->wasStopped()) {
+        viewer->spinOnce(100);
+    }
+}
+
+bool load_info_file(const char* fn, vector<Eigen::Matrix4f>& extrinsics) {
     ifstream ifs(fn, std::ios::in | std::ios::binary);
     if (!ifs) {
         cout << "Cannot read file" << endl;
@@ -53,29 +83,29 @@ bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
     }
 
     uint32_t n_cameras;
-    ifs.read((char*) &n_cameras, sizeof(u_int32_t));
+    ifs.read((char*)&n_cameras, sizeof(u_int32_t));
     cout << "n_cameras = " << n_cameras << endl;
     extrinsics.resize(n_cameras);
 
     for (uint32_t i = 0; i < n_cameras; i++) {
         double focal_length, kappa_1, kappa_2;
         int32_t width, height;
-        double *r = new double[9];
-        double *t = new double[3];
-        auto &e = extrinsics[i];
+        double* r = new double[9];
+        double* t = new double[3];
+        auto& e = extrinsics[i];
 
-        ifs.read((char *)&focal_length, sizeof(double));
-        ifs.read((char *)&kappa_1, sizeof(double));
-        ifs.read((char *)&kappa_2, sizeof(double));
-        ifs.read((char *)&width, sizeof(int32_t));
-        ifs.read((char *)&height, sizeof(int32_t));
-        ifs.read((char *)r, 9 * sizeof(double));
-        ifs.read((char *)t, 3 * sizeof(double));
+        ifs.read((char*)&focal_length, sizeof(double));
+        ifs.read((char*)&kappa_1, sizeof(double));
+        ifs.read((char*)&kappa_2, sizeof(double));
+        ifs.read((char*)&width, sizeof(int32_t));
+        ifs.read((char*)&height, sizeof(int32_t));
+        ifs.read((char*)r, 9 * sizeof(double));
+        ifs.read((char*)t, 3 * sizeof(double));
 
-        e <<    r[0], r[1], r[2], t[0],
-                r[3], r[4], r[5], t[1],
-                r[6], r[7], r[8], t[2],
-                0, 0, 0, 1;
+        e << r[0], r[1], r[2], t[0],
+            r[3], r[4], r[5], t[1],
+            r[6], r[7], r[8], t[2],
+            0, 0, 0, 1;
         Eigen::Quaternionf q(e.block<3, 3>(0, 0));
         q.normalize();
         e.block<3, 3>(0, 0) = q.matrix();
@@ -83,7 +113,7 @@ bool load_info_file(const char *fn, vector<Eigen::Matrix4f>& extrinsics) {
     return true;
 }
 
-bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, vector<int>& camera_types, bool camera_type_valid) {
+bool load_list_file(const char* fn, int n_cameras, vector<string>& image_fns, vector<int>& camera_types, bool camera_type_valid) {
     cout << "Start load list file" << endl;
     cout << n_cameras << endl;
     cout << fn << endl;
@@ -128,7 +158,7 @@ bool load_list_file(const char *fn, int n_cameras, vector<string>& image_fns, ve
     }
 }
 
-bool load_bin_file(const char *fn, pcl::PointCloud<PointXYZ>::Ptr& pts) {
+bool load_bin_file(const char* fn, pcl::PointCloud<PointXYZ>::Ptr& pts) {
     FILE* fp = fopen(fn, "rb");
     char buffer[8];
     int width, height;
@@ -145,9 +175,8 @@ bool load_bin_file(const char *fn, pcl::PointCloud<PointXYZ>::Ptr& pts) {
     }
 }
 
-bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx,
-    std::vector<int>& cidx, std::vector<std::string> &names, std::vector<int>& ptc
-) {
+bool load_nvm_file(const char* fn, std::vector<CameraF>& cameras, std::vector<Point3DF>& points, std::vector<Point2D>& measurements, std::vector<int>& pidx,
+                   std::vector<int>& cidx, std::vector<std::string>& names, std::vector<int>& ptc) {
     ifstream in(fn);
     int rotation_parameter_num = 4;
     bool format_r9t = false;
@@ -186,7 +215,7 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
         cameras[i].SetNormalizedMeasurementDistortion(d[0]);
         names[i] = token;
     }
-    
+
     cout << "cameras loaded" << std::endl;
     cout << "start to load points..." << std::endl;
     in >> npoint;
@@ -196,9 +225,9 @@ bool load_nvm_file(const char *fn, std::vector<CameraF>& cameras, std::vector<Po
     for (int i = 0; i < npoint; i++) {
         float pt[3];
         int cc[3], npj;
-        in  >> pt[0] >> pt[1] >> pt[2]
+        in >> pt[0] >> pt[1] >> pt[2]
             >> cc[0] >> cc[1] >> cc[2] >> npj;
-        
+
         for (int j = 0; j < npj; j++) {
             int cid, fid;
             float imx, imy;
@@ -240,12 +269,12 @@ void load_and_sample_obj(const std::string& fn, const int sample_number, pcl::Po
     }
 
     PointXYZRGB minpt, maxpt;
-    getMinMax3D(*pcd,minpt, maxpt);
+    getMinMax3D(*pcd, minpt, maxpt);
     LOG(INFO) << "min pt = " << minpt << endl;
     LOG(INFO) << "max pt = " << maxpt << endl;
 }
 
-bool load_sequences(const char *fn, vector<string>& seqs) {
+bool load_sequences(const char* fn, vector<string>& seqs) {
     ifstream in(fn);
     CHECK(fs::exists(fn)) << fn << " not exists" << endl;
 
@@ -257,6 +286,50 @@ bool load_sequences(const char *fn, vector<string>& seqs) {
         }
         seqs.emplace_back(seq);
     }
+}
+
+void load_sense_pose_txt(const std::string& filename, std::vector<Eigen::Matrix4f>& es, std::vector<std::string>& fns, std::vector<std::string>& relative_fns) {
+    cout << "load pose start ..." << endl;
+    if (FILE* file = fopen(filename.c_str(), "r")) {
+        int cnt = 1;
+        string s;
+        while (!feof(file)) {
+            s = "";
+            char buffer[256];
+            sprintf(buffer, "frame-%06d.txt", cnt);
+            fns.emplace_back(buffer);
+            relative_fns.emplace_back(s);
+            Eigen::Matrix4f e;
+            Eigen::Quaternionf q;
+            if (fscanf(file, "%f %f %f %f %f %f %f", &e(0, 3), &e(1, 3), &e(2, 3), &q.x(), &q.y(), &q.z(), &q.w()) != 7) {
+                break;
+            }
+            // convert to Twc
+            q.normalize();
+            // q = q.conjugate();
+            e.block(0, 0, 3, 3) = q.toRotationMatrix();
+            es.emplace_back(e);
+            cnt++;
+        }
+        // for (int i = 1; i < 1005; i++) {
+        //     char filename[256];
+        //     string s = "";
+        //     char buffer[256];
+        //     sprintf(buffer, "frame-%06d.txt", i);
+        //     fns.emplace_back(buffer);
+        //     relative_fns.emplace_back(s);
+        //     sprintf(filename, "/home/zhouhan/data/code/computer-vision/visual-localization/gl_render/sense_pose/frame-%06d.txt", i);
+        //     ifstream pose_file(filename);
+        //     Eigen::Matrix4f e;
+
+        //     pose_file >> e(0, 0) >> e(0, 1) >> e(0, 2) >> e(0, 3) >> e(1, 0) >> e(1, 1) >> e(1, 2) >> e(1, 3) >> e(2, 0) >> e(2, 1) >> e(2, 2) >> e(2, 3);
+        //     es.emplace_back(e);
+        // }
+        fclose(file);
+    } else {
+        std::cerr << "cannot open " << filename << "\n";
+    }
+    cout << "load pose finish ..." << endl;
 }
 
 bool load_7scenes_poses(const string base_path, const string scene, std::vector<Eigen::Matrix4f>& es, vector<string>& fns, std::vector<std::string>& relative_fns, bool gettraining, bool gettest) {
@@ -272,7 +345,6 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
     string training_fn = (base_path_str / scene_str / trainingset).string();
     string test_fn = (base_path_str / scene_str / testset).string();
     vector<string> seqs;
-
 
     if (gettraining) {
         load_sequences(training_fn.c_str(), seqs);
@@ -313,7 +385,7 @@ bool load_7scenes_poses(const string base_path, const string scene, std::vector<
             e.block<3, 1>(0, 3) = e.block<3, 1>(0, 3) + Eigen::Vector3f(0.0245, 0, 0);
             e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).inverse();
             // e.block(0, 0, 3, 3) = e.block(0, 0, 3, 3).transpose();
-            e.block(0, 3, 3, 1) = - (e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
+            e.block(0, 3, 3, 1) = -(e.block(0, 0, 3, 3) * e.block(0, 3, 3, 1));
             es.emplace_back(e);
         }
     }
@@ -353,7 +425,7 @@ bool normalize_7scenes_poses(const string base_path, const string scene) {
             auto target_fn = (base_path_str / scene_str / seq / target_s.str()).string();
             ifstream in(fn);
             ofstream target_on(target_fn);
-            target_on << setiosflags(ios::scientific) <<setprecision(8);
+            target_on << setiosflags(ios::scientific) << setprecision(8);
 
             Eigen::Matrix4f e;
             for (int r = 0; r < 4; r++) {
@@ -375,7 +447,7 @@ bool normalize_7scenes_poses(const string base_path, const string scene) {
     }
 }
 
-bool load_mhd_file(const char *fn, mhd_structure& data) {
+bool load_mhd_file(const char* fn, mhd_structure& data) {
     ifstream in(fn);
     string token, equal;
 
@@ -411,7 +483,7 @@ bool load_mhd_file(const char *fn, mhd_structure& data) {
     in >> data.data_file;
 }
 
-void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale) {
+void Erode(PointCloud<PointXYZL>::Ptr& pcd, vector<double>& depth, int r, const camera_intrinsics& intrinsics, float scale) {
     int width = intrinsics.width / scale, height = intrinsics.height / scale;
     const double depth_min = 0, depth_max = 99999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
@@ -443,7 +515,7 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const 
             }
             // cout << min_d << endl;
             auto center = j * width + i;
-            auto &pt = m_pcd->points[center];
+            auto& pt = m_pcd->points[center];
             pt.x = pcd->points[center].x;
             pt.y = pcd->points[center].y;
             pt.z = pcd->points[center].z;
@@ -466,7 +538,7 @@ void Erode(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const 
     pcd = m_pcd;
 }
 
-void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const camera_intrinsics& intrinsics, float scale) {
+void Dilate(PointCloud<PointXYZL>::Ptr& pcd, vector<double>& depth, int r, const camera_intrinsics& intrinsics, float scale) {
     int width = intrinsics.width / scale, height = intrinsics.height / scale;
     const double depth_max = 999999;
     PointCloud<PointXYZL>::Ptr m_pcd(new PointCloud<PointXYZL>);
@@ -498,7 +570,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
             }
             // cout << min_d << endl;
             auto center = j * width + i;
-            auto &pt = m_pcd->points[center];
+            auto& pt = m_pcd->points[center];
             pt.x = pcd->points[center].x;
             pt.y = pcd->points[center].y;
             pt.z = pcd->points[center].z;
@@ -507,8 +579,7 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
                     // cout << "updadte" << endl;
                     pt.label = pcd->points[loc].label;
                     m_depth[center] = depth[loc];
-                }
-                else {
+                } else {
                     pt.label = pcd->points[center].label;
                     m_depth[center] = depth[center];
                 }
@@ -521,10 +592,10 @@ void Dilate(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, int r, const
     pcd = m_pcd;
 }
 
-void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, const camera_intrinsics& intrinsics, int stride, float scale) {
+void depth_based_DE(PointCloud<PointXYZL>::Ptr& pcd, vector<double>& depth, const camera_intrinsics& intrinsics, int stride, float scale) {
     map<int, int> m_map;
     const int pixel_number = depth.size();
-    const int threshold =  pixel_number * 0.0001;
+    const int threshold = pixel_number * 0.0001;
     // LOG(INFO) << "threshold = " << threshold << endl;
     // LOG(INFO) << "pixel number = " << pixel_number << endl;
 
@@ -532,7 +603,7 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
         auto& label = pcd->points[i].label;
         if (label == 0) {
             depth[i] = 999999;
-        } 
+        }
         m_map[label]++;
     }
     for (int i = 0; i < pixel_number; ++i) {
@@ -561,7 +632,7 @@ void depth_based_DE(PointCloud<PointXYZL>::Ptr &pcd, vector<double> &depth, cons
     // }
 }
 
-void fillHoles_fast(cv::Mat &img) {
+void fillHoles_fast(cv::Mat& img) {
     cv::Mat img_filled = img.clone();
     const int min_conscultive_angle_thresh = 280;
     const int distance_thresh = 25;
@@ -619,7 +690,7 @@ void fillHoles_fast(cv::Mat &img) {
     img = img_filled;
 }
 
-bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize) {
+bool transfer_nvm_to_pcd(const char* ifn, const char* ofn, const bool visualize) {
     std::vector<CameraF> cameras;
     std::vector<Point3DF> points;
     std::vector<Point2D> measurements;
@@ -629,7 +700,7 @@ bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize)
     std::vector<int> ptc;
 
     cout << "load nvm..." << endl;
-    if(lass::load_nvm_file(ifn, cameras, points, measurements, pidx, cidx, names, ptc)) {
+    if (lass::load_nvm_file(ifn, cameras, points, measurements, pidx, cidx, names, ptc)) {
         cout << "Success!" << endl;
         PointCloud<pcl::PointXYZRGB>::Ptr cloud(new PointCloud<PointXYZRGB>());
         cout << "transfering nvm to cloud..." << endl;
@@ -638,7 +709,7 @@ bool transfer_nvm_to_pcd(const char *ifn, const char *ofn, const bool visualize)
             cloud->height = 1;
             cloud->width = cloud->points.size();
             pcl::PCDWriter writer;
-            writer.writeBinaryCompressed<pcl::PointXYZRGB> (ofn, *cloud);
+            writer.writeBinaryCompressed<pcl::PointXYZRGB>(ofn, *cloud);
         } else {
             cout << "Failed to transfer" << endl;
             return false;
@@ -675,59 +746,47 @@ bool transfer_nvm_to_pcd(std::vector<Point3DF>& nvm, pcl::PointCloud<pcl::PointX
     return true;
 }
 
-void GroundColorMix(unsigned char &r, unsigned char &g, unsigned char &b, double x, double min, double max)
-{
-	x = x * 360.0;
-	double posSlope = (max - min) / 60;
-	double negSlope = (min - max) / 60;
-	if (x < 60)
-	{
-		r = (unsigned char)max;
-		g = (unsigned char)(posSlope * x + min);
-		b = (unsigned char)min;
-		return;
-	}
-	else if (x < 120)
-	{
-		r = (unsigned char)(negSlope * x + 2 * max + min);
-		g = (unsigned char)max;
-		b = (unsigned char)min;
-		return;
-	}
-	else if (x < 180)
-	{
-		r = (unsigned char)min;
-		g = (unsigned char)max;
-		b = (unsigned char)(posSlope * x - 2 * max + min);
-		return;
-	}
-	else if (x < 240)
-	{
-		r = (unsigned char)min;
-		g = (unsigned char)(negSlope * x + 4 * max + min);
-		b = (unsigned char)max;
-		return;
-	}
-	else if (x < 300)
-	{
-		r = (unsigned char)(posSlope * x - 4 * max + min);
-		g = (unsigned char)min;
-		b = (unsigned char)max;
-		return;
-	}
-	else
-	{
-		r = (unsigned char)max;
-		g = (unsigned char)min;
-		b = (unsigned char)(negSlope * x + 6 * max);
-		return;
-	}
+void GroundColorMix(unsigned char& r, unsigned char& g, unsigned char& b, double x, double min, double max) {
+    x = x * 360.0;
+    double posSlope = (max - min) / 60;
+    double negSlope = (min - max) / 60;
+    if (x < 60) {
+        r = (unsigned char)max;
+        g = (unsigned char)(posSlope * x + min);
+        b = (unsigned char)min;
+        return;
+    } else if (x < 120) {
+        r = (unsigned char)(negSlope * x + 2 * max + min);
+        g = (unsigned char)max;
+        b = (unsigned char)min;
+        return;
+    } else if (x < 180) {
+        r = (unsigned char)min;
+        g = (unsigned char)max;
+        b = (unsigned char)(posSlope * x - 2 * max + min);
+        return;
+    } else if (x < 240) {
+        r = (unsigned char)min;
+        g = (unsigned char)(negSlope * x + 4 * max + min);
+        b = (unsigned char)max;
+        return;
+    } else if (x < 300) {
+        r = (unsigned char)(posSlope * x - 4 * max + min);
+        g = (unsigned char)min;
+        b = (unsigned char)max;
+        return;
+    } else {
+        r = (unsigned char)max;
+        g = (unsigned char)min;
+        b = (unsigned char)(negSlope * x + 6 * max);
+        return;
+    }
 }
 
 // double normalize_value(double value, double min, double max) {
 // }
 
-bool annotate_point_cloud(const char *annotation_dir, std::vector<std::string>& image_fns, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<int>&  point_semantics) {
+bool annotate_point_cloud(const char* annotation_dir, std::vector<std::string>& image_fns, std::vector<Point2D>& measurements, std::vector<int>& pidx, std::vector<int>& cidx, std::vector<int>& point_semantics) {
     LOG(INFO) << "start annotate point cloud with semantic labels..." << endl;
     CHECK(measurements.size() == pidx.size()) << "the size of measurements is not equal to the size of pidx" << endl;
     CHECK(measurements.size() == cidx.size()) << "the size of measurements is not equal to the size of cidx" << endl;
@@ -767,7 +826,7 @@ bool filter_useless_semantics(vector<int>& original_labels, vector<string>& orig
         }
     }
 
-    for (auto& label: original_labels) {
+    for (auto& label : original_labels) {
         label = label_mapping[label];
         if (label != -1) {
             label_counter[label]++;
@@ -865,7 +924,7 @@ std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, d
     vector<int> labels;
     labels.resize(pcd->points.size());
 
-    for (auto& pt: pcd->points) {
+    for (auto& pt : pcd->points) {
         min_value.x = std::min(min_value.x, pt.x);
         min_value.y = std::min(min_value.y, pt.y);
 
@@ -878,19 +937,19 @@ std::vector<int> grid_segmentation(pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcd, d
 
     int x_division = static_cast<int>(range.x / grid_resolution) + 1, y_division = static_cast<int>(range.y / grid_resolution) + 1;
     double x_resolution = range.x / x_division, y_resolution = range.y / y_division;
-    for(int idx = 0; idx < labels.size(); idx++) {
+    for (int idx = 0; idx < labels.size(); idx++) {
         auto& pt = pcd->points[idx];
 
         labels[idx] = static_cast<int>(pt.x / x_resolution) * y_division + static_cast<int>(pt.y / y_resolution);
     }
 }
 
-void filter_few_colors(cv::Mat &img, int few_color_threshold) {
+void filter_few_colors(cv::Mat& img, int few_color_threshold) {
     // construct color count map
     std::map<int, int> color_count_map;
     for (int j = 0; j < img.rows; ++j) {
         for (int i = 0; i < img.cols; ++i) {
-            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            cv::Vec3b& c = img.at<cv::Vec3b>(j, i);
             int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
             if (color_count_map.count(color_key) == 0) {
                 color_count_map[color_key] = 1;
@@ -901,14 +960,14 @@ void filter_few_colors(cv::Mat &img, int few_color_threshold) {
     }
     // find few color color_key
     std::set<int> few_color_keys;
-    for (const auto &p : color_count_map) {
+    for (const auto& p : color_count_map) {
         if (p.second <= few_color_threshold) few_color_keys.insert(p.first);
     }
 
     // filter out few colors
     for (int j = 0; j < img.rows; ++j) {
         for (int i = 0; i < img.cols; ++i) {
-            cv::Vec3b &c = img.at<cv::Vec3b>(j, i);
+            cv::Vec3b& c = img.at<cv::Vec3b>(j, i);
             int color_key = c[0] * 255 * 255 + c[1] * 255 + c[2];
             if (few_color_keys.count(color_key) > 0) {
                 c[0] = c[1] = c[2] = 0;
@@ -917,7 +976,7 @@ void filter_few_colors(cv::Mat &img, int few_color_threshold) {
     }
 }
 
-void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f> &Twcs, int point_size) {
+void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisualizer> viewer, const std::vector<Eigen::Matrix4f>& Twcs, int point_size) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr camera_points(new PointCloud<PointXYZRGB>());
     for (size_t i = 0; i < Twcs.size(); ++i) {
         Eigen::Matrix4f e = Twcs[i];
@@ -937,10 +996,10 @@ void add_camera_trajectory_to_viewer(std::shared_ptr<pcl::visualization::PCLVisu
                 if (point_size > 0) {
                     color(i_axis) = 200;
                 } else {
-                    switch(point_size) {
-                        case -1: color(0) = 255; break;
-                        case -2: color(1) = 255; break;
-                        default : color(2) = 255; break;
+                    switch (point_size) {
+                    case -1: color(0) = 255; break;
+                    case -2: color(1) = 255; break;
+                    default: color(2) = 255; break;
                     }
                 }
                 pcl::PointXYZRGB pt;
@@ -976,7 +1035,6 @@ void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<float>& score
         startcol[label] = std::min(startcol[label], col);
         endrow[label] = std::max(endrow[label], row);
         endcol[label] = std::max(endcol[label], col);
-
     }
     for (int idx = 1; idx < label_size; idx++) {
         if (!visited[idx]) {
@@ -991,10 +1049,10 @@ void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<float>& score
                 float normdis = 10000000000;
                 for (int row = startrow[idx]; row < endrow[idx]; row++) {
                     for (int col = startcol[idx]; col < endcol[idx]; col++) {
-                        int i = row *  width + col;
+                        int i = row * width + col;
                         if (pcd->points[i].label == idx) {
-                            float newdis =(row - image_center_row) * (row - image_center_row) + (col - image_center_col) * (col - image_center_col) ;
-                            if ( newdis < normdis) {
+                            float newdis = (row - image_center_row) * (row - image_center_row) + (col - image_center_col) * (col - image_center_col);
+                            if (newdis < normdis) {
                                 normdis = newdis;
                                 centers[idx] = pcd->points[i];
                             }
@@ -1008,4 +1066,4 @@ void update_candidate_list(PointCloud<PointXYZL>::Ptr& pcd, vector<float>& score
         }
     }
 }
-}
+} // namespace lass

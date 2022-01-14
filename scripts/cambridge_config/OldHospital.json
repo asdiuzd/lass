@@ -1,5 +1,5 @@
 {
-    "obj" : "oldhospital.obj",
+    "obj" : "OldHospital.obj",
     "ply" : "fused.ply",
     "raycast_voxel_grid" : 0.12,
     "downsample_ratio": 0.5,
@@ -11,5 +11,5 @@
         "voxel_resolution" : 0.03,
         "seed_resolution" : 1.1
     },
-    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/OldHospital"
+    "sc_data_dir" : "/home/zhouhan/data/code/computer-vision/visual-localization/gl_render_cambridge/out/OldHospital"
 }

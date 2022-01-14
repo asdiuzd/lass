@@ -13,5 +13,5 @@
         "voxel_resolution" : 0.05,
         "seed_resolution" : 2.0
     },
-    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/Street"
+    "sc_data_dir" : "/home/zhouhan/data/code/computer-vision/visual-localization/gl_render_cambridge/out/Street"
 }

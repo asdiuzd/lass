@@ -31,9 +31,9 @@ const std::string MapManager::parameters_name{"parameters.txt"};
 
 bool stop_view = false;
 
-void keyboardEvent(const pcl::visualization::KeyboardEvent &event, void *mm_void) {
+void keyboardEvent(const pcl::visualization::KeyboardEvent& event, void* mm_void) {
     LOG(INFO) << "key board event: " << event.getKeySym() << endl;
-    auto mm = static_cast<MapManager *>(mm_void);
+    auto mm = static_cast<MapManager*>(mm_void);
     if (event.getKeySym() == "s" && event.keyDown()) {
         mm->dye_through_semantics();
     } else if (event.getKeySym() == "p" && event.keyDown()) {
@@ -59,29 +59,28 @@ void MapManager::initialize_viewer() {
 void MapManager::update_view() {
     if (m_disable_viewer) return;
     m_viewer->removeAllPointClouds();
-    m_viewer->setBackgroundColor (0, 0, 0);
+    m_viewer->setBackgroundColor(0, 0, 0);
     switch (m_view_type) {
-        case 0: {
-            pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
-            m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "pcd");
-            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pcd");
-            break;
-        }
-        case 1: {
-            m_viewer->addPointCloud (m_target_pcd, "target_pcd");
-            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
-            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
-            break;
-        }
-        case 2: {
-            m_viewer->addPointCloud (m_labeled_pcd, "labeled_pcd");
-            m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled_pcd");
-            m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled_pcd");
-            break;
-        }
-        default: {
-
-        }
+    case 0: {
+        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(m_pcd);
+        m_viewer->addPointCloud<pcl::PointXYZRGB>(m_pcd, rgb, "pcd");
+        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "pcd");
+        break;
+    }
+    case 1: {
+        m_viewer->addPointCloud(m_target_pcd, "target_pcd");
+        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
+        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
+        break;
+    }
+    case 2: {
+        m_viewer->addPointCloud(m_labeled_pcd, "labeled_pcd");
+        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "labeled_pcd");
+        m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "labeled_pcd");
+        break;
+    }
+    default: {
+    }
     }
     if (m_show_camera_extrinsics) {
         update_camera_trajectory_to_viewer();
@@ -101,18 +100,18 @@ void MapManager::update_centers_to_viewer(std::vector<pcl::PointXYZL>& centers) 
     }
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(pcd);
     m_viewer->addPointCloud(pcd, rgb, "centers");
-    m_viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "centers");
+    m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "centers");
     m_viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "centers");
 }
 
-MapManager::MapManager():
+MapManager::MapManager() :
     m_pcd(new PointCloud<PointXYZRGB>()),
     m_octree(1.0f),
     m_viewer(new visualization::PCLVisualizer()) {
     initialize_viewer();
 }
 
-MapManager::MapManager(const std::string& dir):
+MapManager::MapManager(const std::string& dir) :
     m_pcd(new PointCloud<PointXYZRGB>()),
     m_octree(1.0f),
     m_viewer(new visualization::PCLVisualizer()) {
@@ -127,39 +126,39 @@ void MapManager::load_semantic_json(const std::string& fn) {
     s_in >> j;
 
     m_semantic_names.resize(j["overall_semantics"].size());
-    for(int idx = 0; idx < j["overall_semantics"].size(); idx++) {
+    for (int idx = 0; idx < j["overall_semantics"].size(); idx++) {
         m_semantic_names[idx] = j["overall_semantics"][idx].get<string>();
     }
 
     m_landmarks_semantic_names.resize(j["landmarks"].size());
-    for(int idx = 0; idx < j["landmarks"].size(); idx++) {
+    for (int idx = 0; idx < j["landmarks"].size(); idx++) {
         m_landmarks_semantic_names[idx] = j["landmarks"][idx].get<string>();
     }
 
     m_background_semantic_names.resize(j["background"].size());
-    for(int idx = 0; idx < j["background"].size(); idx++) {
+    for (int idx = 0; idx < j["background"].size(); idx++) {
         m_background_semantic_names[idx] = j["background"][idx].get<string>();
     }
 
     m_removed_semantic_names.resize(j["removed"].size());
-    for(int idx = 0; idx < j["removed"].size(); idx++) {
+    for (int idx = 0; idx < j["removed"].size(); idx++) {
         m_removed_semantic_names[idx] = j["removed"][idx].get<string>();
     }
 }
 
-void MapManager::export_to_semantic_json(const std::string &fn) {
+void MapManager::export_to_semantic_json(const std::string& fn) {
     json j;
 
-    for(int idx = 0; idx < m_semantic_names.size(); idx++) {
+    for (int idx = 0; idx < m_semantic_names.size(); idx++) {
         j["overall_semantics"].push_back(m_semantic_names[idx]);
     }
-    for(int idx = 0; idx < m_landmarks_semantic_names.size(); idx++) {
+    for (int idx = 0; idx < m_landmarks_semantic_names.size(); idx++) {
         j["landmarks"].push_back(m_landmarks_semantic_names[idx]);
     }
-    for(int idx = 0; idx < m_background_semantic_names.size(); idx++) {
+    for (int idx = 0; idx < m_background_semantic_names.size(); idx++) {
         j["background"].push_back(m_background_semantic_names[idx]);
     }
-    for(int idx = 0; idx < m_removed_semantic_names.size(); idx++) {
+    for (int idx = 0; idx < m_removed_semantic_names.size(); idx++) {
         j["removed"].push_back(m_removed_semantic_names[idx]);
     }
 
@@ -182,7 +181,7 @@ void MapManager::export_to_parameters(const std::string& fn) {
 
     p_on << m_semantic_label.size() << endl;
 
-    for (auto& label: m_semantic_label) {
+    for (auto& label : m_semantic_label) {
         p_on << label << endl;
     }
 }
@@ -250,8 +249,8 @@ void MapManager::dye_through_semantics() {
     LOG(INFO) << "max semantic label = " << max_semantic << endl;
 
     for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-        auto &pt = m_pcd->points[idx];
-        auto &semantic = m_semantic_label[idx];
+        auto& pt = m_pcd->points[idx];
+        auto& semantic = m_semantic_label[idx];
 
         if (semantic == -1) {
             pt.r = pt.g = pt.b = 10;
@@ -266,8 +265,8 @@ void MapManager::dye_through_clusters() {
     LOG(INFO) << "max cluster label = " << max_cluster_label << endl;
 
     for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-        auto &pt = m_pcd->points[idx];
-        auto &cluster = m_cluster_label[idx];
+        auto& pt = m_pcd->points[idx];
+        auto& cluster = m_cluster_label[idx];
 
         if (cluster == -1) {
             pt.r = pt.g = pt.b = 40;
@@ -279,7 +278,7 @@ void MapManager::dye_through_clusters() {
 
 void MapManager::dye_through_landmarks() {
     for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-        auto &pt = m_pcd->points[idx];
+        auto& pt = m_pcd->points[idx];
         if (m_semantic_label[idx] == -1) {
             GroundColorMix(pt.r, pt.g, pt.b, normalize_value(LandmarkType::UNKNOWN, 0, LandmarkType::NUMBER));
         } else {
@@ -291,7 +290,7 @@ void MapManager::dye_through_landmarks() {
 
 void MapManager::dye_through_render() {
     for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-        auto &pt = m_pcd->points[idx];
+        auto& pt = m_pcd->points[idx];
 
         auto label = m_render_label[idx];
         GroundColorMix(pt.r, pt.g, pt.b, normalize_value(label, 0, LandmarkType::NUMBER));
@@ -306,7 +305,7 @@ void MapManager::figure_out_landmarks_annotation() {
     m_index_of_unknown = PointIndices::Ptr{new PointIndices};
 
     for (int idx = 0; idx < m_semantic_names.size(); idx++) {
-        auto &name = m_semantic_names[idx];
+        auto& name = m_semantic_names[idx];
 
         auto it1 = std::find(m_landmarks_semantic_names.begin(), m_landmarks_semantic_names.end(), name);
         if (it1 != m_landmarks_semantic_names.end()) {
@@ -347,7 +346,7 @@ void MapManager::figure_out_landmarks_annotation() {
 
             case LandmarkType::REMOVED:
                 m_index_of_removed->indices.push_back(idx);
-                break; 
+                break;
 
             default:
                 m_index_of_unknown->indices.push_back(idx);
@@ -370,7 +369,7 @@ void MapManager::prepare_octree_for_target_pcd(float resolution) {
 }
 
 // extrinsics: world to camera
-void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB> &centers, bool depthDE, int stride, float scale, const std::string &raycast_pcd_type, pcl::PointCloud<pcl::PointXYZL>::Ptr *pcd_visible) {
+void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_intrinsics& intrinsics, pcl::PointCloud<pcl::PointXYZL>::Ptr& pcd, const std::vector<pcl::PointXYZRGB>& centers, bool depthDE, int stride, float scale, const std::string& raycast_pcd_type, pcl::PointCloud<pcl::PointXYZL>::Ptr* pcd_visible) {
     // LOG(INFO) << "start raycasting" << endl;
     // const int scale = 4;
     // const int width = 1024 / scale, height = 1024 / scale;
@@ -386,12 +385,12 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
         (*pcd_visible)->points.resize(width * height);
     }
 
-    Eigen::Vector3f origin = - extrinsics.block(0, 0, 3, 3).inverse() * extrinsics.block(0, 3, 3, 1);
+    Eigen::Vector3f origin = -extrinsics.block(0, 0, 3, 3).inverse() * extrinsics.block(0, 3, 3, 1);
     vector<vector<Eigen::Vector3f>> directions(width, vector<Eigen::Vector3f>(height));
     vector<double> depth(width * height, 999999);
 
     int hit_count = 0;
-    
+
     pcl::PointCloud<pcl::PointXYZL>::Ptr raycast_pcd;
 
     if (raycast_pcd_type == "labeled") {
@@ -399,16 +398,16 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
     } else if (raycast_pcd_type == "target") {
         raycast_pcd = m_target_pcd;
     }
-    // TODO(ybbbbt): in fact, we always use m_target_pcd for raycasting(due to prepare_octree_for_target_pcd), but currently m_labeled_pcd is the same as m_target_pcd 
+    // TODO(ybbbbt): in fact, we always use m_target_pcd for raycasting(due to prepare_octree_for_target_pcd), but currently m_labeled_pcd is the same as m_target_pcd
     CHECK(m_labeled_pcd == m_target_pcd);
     for (int u = 0; u < width; u++) {
         for (int v = 0; v < height; v++) {
-            auto &d = directions[u][v];
+            auto& d = directions[u][v];
             vector<int> k_indices;
             Eigen::Vector3f dc((u - cx) / fx, (v - cy) / fy, 1);
             d = extrinsics.block(0, 0, 3, 3).inverse() * dc + origin;
 
-            auto &pt = pcd->points[v * width + u];
+            auto& pt = pcd->points[v * width + u];
             // pt.x = d(0);
             // pt.y = d(1);
             // pt.z = d(2);
@@ -417,7 +416,7 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
 
             m_octree.getIntersectedVoxelIndices(origin, d, k_indices, 1);
             if (k_indices.size() > 0) {
-                auto &idx = k_indices[0];
+                auto& idx = k_indices[0];
                 if (idx >= raycast_pcd->points.size()) {
                     LOG(INFO) << "Alert! " << idx << endl;
                 }
@@ -428,16 +427,14 @@ void MapManager::raycasting_pcd(const Eigen::Matrix4f& extrinsics, const camera_
                     depth[v * width + u] = euclidean_distance(
                         raycast_pcd->points[idx].x - origin[0],
                         raycast_pcd->points[idx].y - origin[1],
-                        raycast_pcd->points[idx].z - origin[2]
-                    );
+                        raycast_pcd->points[idx].z - origin[2]);
                 } else {
                     // depth to cluster center
                     auto cluster_center = centers[raycast_pcd->points[idx].label];
                     depth[v * width + u] = euclidean_distance(
                         cluster_center.x - origin[0],
                         cluster_center.y - origin[1],
-                        cluster_center.z - origin[2]
-                    );
+                        cluster_center.z - origin[2]);
                 }
                 if (pcd_visible) {
                     (*pcd_visible)->points[v * width + u] = raycast_pcd->points[idx];
@@ -476,19 +473,92 @@ void MapManager::euclidean_landmark_clustering() {
     ec.extract(m_clusters);
     cout << "Total: " << m_clusters.size() << " clusters" << endl;
     cout << "Labeling" << endl;
-    
+
     int tot_clusters = 0;
     m_cluster_label.resize(0);
 
     m_cluster_label.resize(m_pcd->points.size(), -1);
     int outlier_clusters = 0;
     for (int label = 0; label < m_clusters.size(); label++) {
-        auto &indices = m_clusters[label];
-        for (auto &idx: indices.indices) {
+        auto& indices = m_clusters[label];
+        for (auto& idx : indices.indices) {
             m_cluster_label[idx] = label;
         }
     }
     cout << "Total invalid clusters: " << outlier_clusters << endl;
+}
+
+std::vector<Cluster> MapManager::reform_labeled_pcd(float small_cluster_thresh) {
+    // find too small clusters
+    using min_max_pair = std::pair<Eigen::Vector3f, Eigen::Vector3f>;
+    // label->min_max_pair
+    std::unordered_map<uint32_t, min_max_pair> label_size;
+    for (auto &p : m_target_pcd->points) {
+        if (label_size.count(p.label) == 0) {
+            min_max_pair minmax;
+            minmax.first = {p.x, p.y, p.z};
+            minmax.second = {p.x, p.y, p.z};
+            label_size[p.label] = minmax;
+        } else {
+            auto &minmax = label_size[p.label];
+            minmax.first = {
+                std::min(minmax.first.x(), p.x),
+                std::min(minmax.first.y(), p.y),
+                std::min(minmax.first.z(), p.z)};
+            minmax.second = {
+                std::max(minmax.second.x(), p.x),
+                std::max(minmax.second.y(), p.y),
+                std::max(minmax.second.z(), p.z)};
+        }
+    }
+    std::set<uint32_t> small_cluster_labels;
+    // for (const auto &p : label_size) {
+    //     float cluster_size = (p.second.first - p.second.second).norm();
+    //     if (cluster_size < small_cluster_thresh) small_cluster_labels.insert(p.first);
+    // }
+    LOG(INFO) << "Find small clusters " << small_cluster_labels.size();
+    // compress label and mark small clusters to 0
+    // zero remains for invalid labels
+    // remove point with label == 0
+    pcl::PointIndices::Ptr outliers(new pcl::PointIndices());
+    uint32_t label_idx = 1;
+    std::unordered_map<uint32_t, uint32_t> label_map;
+    for (int i = 0; i < m_target_pcd->points.size(); ++i) {
+        auto &p = m_target_pcd->points[i];
+        if (p.label == 0) {
+            outliers->indices.push_back(i);
+            continue;
+        }
+        if (small_cluster_labels.count(p.label) > 0) {
+            p.label = 0;
+            outliers->indices.push_back(i);
+            continue;
+        }
+        if (label_map.count(p.label) == 0) {
+            label_map[p.label] = label_idx++;
+        }
+        p.label = label_map[p.label];
+    }
+    // pcl::ExtractIndices<pcl::PointXYZL> extract;
+    // extract.setInputCloud(m_target_pcd);
+    // extract.setIndices(outliers);
+    // extract.setNegative(true);
+    // extract.filter(*m_target_pcd);
+    // compute centers
+    std::vector<Cluster> centers(label_idx);
+    std::vector<int> centers_counter(centers.size(), 0);
+    for (const auto &p : m_target_pcd->points) {
+        auto &c = centers[p.label];
+        c.center += Eigen::Vector3f(p.x, p.y, p.z);
+        centers_counter[p.label]++;
+    }
+    for (int i = 0; i < centers.size(); ++i) {
+        int sz = std::max(1, centers_counter[i]);
+        centers[i].center /= sz;
+        centers[i].center_orig = centers[i].center;
+    }
+    m_centers = centers;
+    return centers;
 }
 
 void MapManager::supervoxel_landmark_clustering(float voxel_resolution, float seed_resolution, float spatial_importance, float color_importance, float normal_importance) {
@@ -509,8 +579,8 @@ void MapManager::supervoxel_landmark_clustering(float voxel_resolution, float se
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_landmarks() {
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(m_index_of_landmark);
@@ -520,8 +590,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_landmarks() {
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_background() {
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(m_index_of_background);
@@ -531,8 +601,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_background() {
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_removed() {
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(m_index_of_removed);
@@ -542,8 +612,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_removed() {
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_unknown() {
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(m_index_of_unknown);
@@ -553,8 +623,8 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_unknown() {
 }
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr MapManager::extract_points(pcl::PointIndices::Ptr indices) {
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(indices);
@@ -592,7 +662,7 @@ void MapManager::show_point_cloud() {
 }
 
 void MapManager::filter_useless_semantics_from_json(const std::string& fn) {
-    LOG(INFO) << "read json" << endl;   
+    LOG(INFO) << "read json" << endl;
     json j_remained_semantic_names;
     ifstream ifn(fn.c_str());
     vector<string> remained_names;
@@ -654,8 +724,8 @@ void MapManager::filter_outliers(float radius, int k) {
         m_render_label[m_index_of_background->indices[idx]] = LandmarkType::BACKGROUND;
     }
 
-    PointCloud<PointXYZRGB>::Ptr    extracted_pcd{new PointCloud<PointXYZRGB>()};
-    ExtractIndices<PointXYZRGB>     extractor;
+    PointCloud<PointXYZRGB>::Ptr extracted_pcd{new PointCloud<PointXYZRGB>()};
+    ExtractIndices<PointXYZRGB> extractor;
 
     extractor.setInputCloud(m_pcd);
     extractor.setIndices(remained_indices);
@@ -675,47 +745,47 @@ void MapManager::filter_landmarks_through_background(int knn, float ratio) {
         1 - road block on the boundary
         2 - road block in the center
     */
-   LOG(INFO) << "width = " << width << endl;
-   LOG(INFO) << "height = " << height << endl;
+    LOG(INFO) << "width = " << width << endl;
+    LOG(INFO) << "height = " << height << endl;
 
-   for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-       auto& pt = m_pcd->points[idx];
-       auto& label = m_render_label[idx];
-       if (label == LandmarkType::LANDMARK) {
-           continue;
-       }
+    for (int idx = 0; idx < m_pcd->points.size(); idx++) {
+        auto& pt = m_pcd->points[idx];
+        auto& label = m_render_label[idx];
+        if (label == LandmarkType::LANDMARK) {
+            continue;
+        }
 
-       int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
-       map[x][y] = 1;
-   }
+        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
+        map[x][y] = 1;
+    }
 
-   for (int x = 1; x < width - 1; x++) {
-       for (int y = 1; y < height - 1; y++) {
-           if (map[x-1][y] != 0 && map[x+1][y] != 0 && map[x][y-1] != 0 && map[x][y+1] != 0) {
-               map[x][y] = 2;
-           }
-       }
-   }
+    for (int x = 1; x < width - 1; x++) {
+        for (int y = 1; y < height - 1; y++) {
+            if (map[x - 1][y] != 0 && map[x + 1][y] != 0 && map[x][y - 1] != 0 && map[x][y + 1] != 0) {
+                map[x][y] = 2;
+            }
+        }
+    }
 
-   m_index_of_landmark->indices.resize(0);
-   for (int idx = 0; idx < m_pcd->points.size(); idx++) {
-       auto& pt = m_pcd->points[idx];
-       auto& label = m_render_label[idx];
-       if (label == LandmarkType::BACKGROUND) {
-           continue;
-       }
+    m_index_of_landmark->indices.resize(0);
+    for (int idx = 0; idx < m_pcd->points.size(); idx++) {
+        auto& pt = m_pcd->points[idx];
+        auto& label = m_render_label[idx];
+        if (label == LandmarkType::BACKGROUND) {
+            continue;
+        }
 
-       int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
-    //    label = map[x][y];
-       if (map[x][y] == 2) {
-           label = LandmarkType::HIGHLIGHT;
-       } else {
-           m_index_of_landmark->indices.emplace_back(idx);
-       }
-   }
+        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
+        //    label = map[x][y];
+        if (map[x][y] == 2) {
+            label = LandmarkType::HIGHLIGHT;
+        } else {
+            m_index_of_landmark->indices.emplace_back(idx);
+        }
+    }
 }
 
-void MapManager::filter_supervoxels_through_background(const std::string &pcd_type) {
+void MapManager::filter_supervoxels_through_background(const std::string& pcd_type) {
     LOG(INFO) << __func__ << endl;
     pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
     if (pcd_type == "labeled") {
@@ -734,37 +804,37 @@ void MapManager::filter_supervoxels_through_background(const std::string &pcd_ty
         1 - road block on the boundary
         2 - road block in the center
     */
-   LOG(INFO) << "width = " << width << endl;
-   LOG(INFO) << "height = " << height << endl;
+    LOG(INFO) << "width = " << width << endl;
+    LOG(INFO) << "height = " << height << endl;
 
-   for (int idx = 0; idx < background_pcd->points.size(); idx++) {
-       auto& pt = background_pcd->points[idx];
-       int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
-       map[x][y] = 1;
-   }
+    for (int idx = 0; idx < background_pcd->points.size(); idx++) {
+        auto& pt = background_pcd->points[idx];
+        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
+        map[x][y] = 1;
+    }
 
-   for (int x = 1; x < width - 1; x++) {
-       for (int y = 1; y < height - 1; y++) {
-           if (map[x-1][y] != 0 && map[x+1][y] != 0 && map[x][y-1] != 0 && map[x][y+1] != 0) {
-               map[x][y] = 2;
-           }
-       }
-   }
+    for (int x = 1; x < width - 1; x++) {
+        for (int y = 1; y < height - 1; y++) {
+            if (map[x - 1][y] != 0 && map[x + 1][y] != 0 && map[x][y - 1] != 0 && map[x][y + 1] != 0) {
+                map[x][y] = 2;
+            }
+        }
+    }
 
-   PointIndices::Ptr valid_indices{new PointIndices};
-   for (int idx = 0; idx < pcd_ptr->points.size(); idx++) {
-       auto& pt = pcd_ptr->points[idx];
+    PointIndices::Ptr valid_indices{new PointIndices};
+    for (int idx = 0; idx < pcd_ptr->points.size(); idx++) {
+        auto& pt = pcd_ptr->points[idx];
 
-       int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
-       if (map[x][y] == 2) {
-           pt.label = max_target_label;
-       } else {
-           valid_indices->indices.emplace_back(idx);
-       }
-   }
+        int x = (pt.x - min_pt.x) / resolution, y = (pt.y - min_pt.y) / resolution;
+        if (map[x][y] == 2) {
+            pt.label = max_target_label;
+        } else {
+            valid_indices->indices.emplace_back(idx);
+        }
+    }
 
-    PointCloud<PointXYZL>::Ptr    valid_pts{new PointCloud<PointXYZL>()};
-    ExtractIndices<PointXYZL>     extractor;
+    PointCloud<PointXYZL>::Ptr valid_pts{new PointCloud<PointXYZL>()};
+    ExtractIndices<PointXYZL> extractor;
 
     extractor.setInputCloud(pcd_ptr);
     extractor.setIndices(valid_indices);
@@ -776,7 +846,7 @@ void MapManager::filter_supervoxels_through_background(const std::string &pcd_ty
     }
 }
 
-void MapManager::filter_minor_segmentations(int number_threshold, const std::string &pcd_type) {
+void MapManager::filter_minor_segmentations(int number_threshold, const std::string& pcd_type) {
     LOG(INFO) << __func__ << endl;
     pcl::PointCloud<pcl::PointXYZL>::Ptr pcd_ptr;
     if (pcd_type == "labeled") {
@@ -788,13 +858,14 @@ void MapManager::filter_minor_segmentations(int number_threshold, const std::str
     int max_label = std::max_element(
                         pcd_ptr->points.begin(),
                         pcd_ptr->points.end(),
-                        [&](const PointXYZL &p1, const PointXYZL &p2) {
+                        [&](const PointXYZL& p1, const PointXYZL& p2) {
                             return p1.label < p2.label;
                         })
-                        ->label + 1;
+                        ->label
+                    + 1;
 
     vector<int> label_counter(max_label, 0), label_mapping(max_label, 0);
-    for (auto& p: pcd_ptr->points) {
+    for (auto& p : pcd_ptr->points) {
         label_counter[p.label]++;
     }
 
@@ -805,6 +876,7 @@ void MapManager::filter_minor_segmentations(int number_threshold, const std::str
 
     int counter = 1;
     for (int label = 0; label < label_counter.size(); label++) {
+        cout << "label:" << label << " " << label_counter[label] << endl;
         if (label_counter[label] > number_threshold) {
             label_mapping[label] = counter++;
         }
@@ -819,7 +891,7 @@ void MapManager::filter_minor_segmentations(int number_threshold, const std::str
     PointCloud<PointXYZL>::Ptr remained_pts{new PointCloud<PointXYZL>};
     // remained_pts->points.reserve(pcd_ptr->points.size());
 
-    for (auto& p:pcd_ptr->points) {
+    for (auto& p : pcd_ptr->points) {
         auto& label = p.label;
         if (label_counter[label] > number_threshold) {
             label = label_mapping[label];
@@ -845,9 +917,12 @@ void MapManager::filter_points_near_cameras(float radius) {
     std::set<int> outlier_indices_set;
     for (Eigen::Matrix4f e : m_camera_extrinsics) {
         // apply rotation fix to extrinsics
-        e(1, 3) *= -1; e(2, 3) *= -1;
-        e(0, 1) *= -1; e(0, 2) *= -1;
-        e(1, 0) *= -1; e(2, 0) *= -1;
+        e(1, 3) *= -1;
+        e(2, 3) *= -1;
+        e(0, 1) *= -1;
+        e(0, 2) *= -1;
+        e(1, 0) *= -1;
+        e(2, 0) *= -1;
         Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
         Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
         Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
@@ -858,7 +933,7 @@ void MapManager::filter_points_near_cameras(float radius) {
         pt.y = pwc.y();
         pt.z = pwc.z();
         if (kdtree.radiusSearch(pt, radius, near_indices, distances) > 0) {
-            std::copy(near_indices.begin(), near_indices.end(),std::inserter(outlier_indices_set, outlier_indices_set.end()));
+            std::copy(near_indices.begin(), near_indices.end(), std::inserter(outlier_indices_set, outlier_indices_set.end()));
         }
     }
     // also remove HIGHLIGHT (ground) points
@@ -886,9 +961,12 @@ void MapManager::update_camera_trajectory_to_viewer() {
         Eigen::Matrix4f e = m_camera_extrinsics[i];
         int camera_type = m_camera_types[i];
         // apply rotation fix to extrinsics
-        e(1, 3) *= -1; e(2, 3) *= -1;
-        e(0, 1) *= -1; e(0, 2) *= -1;
-        e(1, 0) *= -1; e(2, 0) *= -1;
+        e(1, 3) *= -1;
+        e(2, 3) *= -1;
+        e(0, 1) *= -1;
+        e(0, 2) *= -1;
+        e(1, 0) *= -1;
+        e(2, 0) *= -1;
         Eigen::Vector3f pcw = e.block<3, 1>(0, 3);
         Eigen::Quaternionf qcw(e.block<3, 3>(0, 0));
         Eigen::Vector3f pwc = -(qcw.conjugate() * pcw);
@@ -928,16 +1006,16 @@ void MapManager::assign_supervoxel_label_to_filtered_pcd() {
     std::vector<int> point_indices(K);
     std::vector<float> distances(K);
     for (int i = 0; i < m_pcd->points.size(); ++i) {
-        const auto &orig_pt = m_pcd->points[i];
+        const auto& orig_pt = m_pcd->points[i];
         pcl::PointXYZL pt;
         pt.x = orig_pt.x;
         pt.y = orig_pt.y;
         pt.z = orig_pt.z;
-        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {    
+        if (kdtree.nearestKSearch(pt, K, point_indices, distances) > 0) {
             pt.label = m_target_pcd->points[point_indices[0]].label;
             m_labeled_pcd->points.emplace_back(pt);
         }
     }
 }
 
-}
+} // namespace lass
