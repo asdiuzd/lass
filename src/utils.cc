@@ -32,6 +32,7 @@ void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, const string vn) 
     pcl::visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer); // viewer
     // pcl::visualization::CloudViewer viewer(vn.c_str());
     viewer->addPointCloud(cloud, "target_pcd");
+    cout << "-----------------" << endl;
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
     while (!viewer->wasStopped()) {
@@ -56,19 +57,19 @@ void visualize_pcd(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<lass:
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_OPACITY, 1, "target_pcd");
     viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "target_pcd");
 
-    pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
-    for (const auto &c : cluster) {
-        pcl::PointXYZRGB pt;
-        pt.x = c.center.x();
-        pt.y = c.center.y();
-        pt.z = c.center.z();
-        pt.r = 255;
-        pt.g = pt.b = 0;
-        centers_pcd->points.push_back(pt);
-    }
-    pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
-    viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
-    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "center_cloud");
+    // pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
+    // for (const auto &c : cluster) {
+    //     pcl::PointXYZRGB pt;
+    //     pt.x = c.center.x();
+    //     pt.y = c.center.y();
+    //     pt.z = c.center.z();
+    //     pt.r = 255;
+    //     pt.g = pt.b = 0;
+    //     centers_pcd->points.push_back(pt);
+    // }
+    // pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
+    // viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
+    // viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 7, "center_cloud");
 
     while (!viewer->wasStopped()) {
         viewer->spinOnce(100);

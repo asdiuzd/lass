@@ -1,10 +1,10 @@
 {
-    "model": "../../tsdf-fusion-python/chess.ply",
+    "model": "/home/zhouhan/data/7scenes_release/tsdf/chess.ply",
     "scene": "chess",
     "voxel_resolution": 0.005,
     "seed_resolution": 0.15,
-    "base_path": "/home/drinkingcoder/Dataset/7scenes/",
-    "target_path": "/home/drinkingcoder/Dataset/7scenes/segmentations/",
+    "base_path": "/home/zhouhan/data/7scenes_release/",
+    "target_path": "/home/zhouhan/data/segmentations/7scenes/",
     "parameters_fn": "parameters.json",
-    "sc_data_dir" : "/home/drinkingcoder/Dataset/SceneCoordinateProjection/SceneCoordinates/chess"
+    "sc_data_dir" : "/home/zhouhan/data/SceneCoordinates/7scenes/chess"
 }
