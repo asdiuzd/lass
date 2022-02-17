@@ -21,6 +21,7 @@
 
 namespace {
 
+bool g_stop_view = false;
 bool g_disable_viewer = true;
 
 using namespace std;
@@ -101,24 +102,24 @@ void processing(std::shared_ptr<MapManager>& mm, float voxel_resolution = 0.015,
         mm->m_index_of_landmark->indices[idx] = idx;
     }
     
-    if (!g_disable_viewer) {
-        mm->update_view();
-        mm->show_point_cloud();
-    }
+    // if (!g_disable_viewer) {
+    //     mm->update_view();
+    //     mm->show_point_cloud();
+    // }
 
     mm->supervoxel_landmark_clustering(voxel_resolution, seed_resolution, 1.0, 0.0, 0.1);
     // mm->set_view_target_pcd(true);
-    if (!g_disable_viewer) {
-        mm->update_view();
-        mm->show_point_cloud();
-    }
+    // if (!g_disable_viewer) {
+    //     mm->update_view();
+    //     mm->show_point_cloud();
+    // }
     
-    mm->filter_minor_segmentations(30);
-    mm->m_pcd = mm->extract_points_from_supervoxel();
-    if (!g_disable_viewer) {
-        mm->update_view();
-        mm->show_point_cloud();
-    }
+    // mm->filter_minor_segmentations(30);
+    // mm->m_pcd = mm->extract_points_from_supervoxel();
+    // if (!g_disable_viewer) {
+    //     mm->update_view();
+    //     mm->show_point_cloud();
+    // }
 }
 
 void visualize_centers(json& j_output, std::shared_ptr<MapManager>& mm) {
@@ -216,6 +217,48 @@ inline std::vector<Cluster> reform_labeled_pcd(pcl::PointCloud<PointXYZL>::Ptr p
     return centers;
 }
 
+inline void keyboard_callback(const pcl::visualization::KeyboardEvent &event, void *ptr) {
+    LOG(INFO) << "key board event: " << event.getKeySym() << endl;
+    if (event.getKeySym() == "n" && event.keyDown()) {
+        g_stop_view = true;
+    }
+}
+
+inline void visualize_labeled_points(pcl::PointCloud<pcl::PointXYZL>::Ptr cloud, std::vector<Cluster> *centers = nullptr) {
+    if (g_disable_viewer) return;
+    std::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer);
+    viewer->registerKeyboardCallback(keyboard_callback, nullptr);
+    viewer->addPointCloud(cloud, "base_cloud");
+    viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 0.5, "base_cloud");
+    viewer->addCoordinateSystem(1.0);
+    if (centers) {
+        pcl::PointCloud<PointXYZRGB>::Ptr centers_pcd(new pcl::PointCloud<PointXYZRGB>);
+        for (const auto &c : *centers) {
+            pcl::PointXYZRGB pt;
+            pt.x = c.center.x();
+            pt.y = c.center.y();
+            pt.z = c.center.z();
+            pt.r = 255;
+            pt.g = pt.b = 0;
+            centers_pcd->points.push_back(pt);
+            // pt.x = c.center_orig.x();
+            // pt.y = c.center_orig.y();
+            // pt.z = c.center_orig.z();
+            // pt.r = 0;
+            // pt.g = 0;
+            // pt.b = 255;
+            // centers_pcd->points.push_back(pt);
+        }
+        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> cloud_color_handler(centers_pcd);
+        viewer->addPointCloud(centers_pcd, cloud_color_handler, "center_cloud");
+        viewer->setPointCloudRenderingProperties(pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 15, "center_cloud");
+    }
+    while (!viewer->wasStopped() && !g_stop_view) {
+        viewer->spinOnce(100);
+    }
+    g_stop_view = false;
+}
+
 void test_ply_with_scene_coordinate(int argc, char** argv) {
     /*
         argv[1] - json fn
@@ -271,13 +314,6 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
     mm->load_and_sample_ply(ply_path, sample_number);
     processing(mm, voxel_resolution, seed_resolution);
 
-    auto labeled_pcd = mm->m_target_pcd;
-    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
-    tree.setInputCloud(labeled_pcd);
-    std::vector<int> point_indices(1);
-    std::vector<float> distances(1);
-    PointXYZL point;
-    cout << "labeled pcd size = " << labeled_pcd->points.size() << endl;
 
     PointCloud<PointXYZL>::Ptr pcd{new PointCloud<PointXYZL>};
 
@@ -293,6 +329,16 @@ void test_ply_with_scene_coordinate(int argc, char** argv) {
     std::vector<Cluster> centers;
     centers = reform_labeled_pcd(mm->m_target_pcd);
 
+    auto labeled_pcd = mm->m_target_pcd;
+    pcl::KdTreeFLANN<pcl::PointXYZL> tree;
+    tree.setInputCloud(labeled_pcd);
+    std::vector<int> point_indices(1);
+    std::vector<float> distances(1);
+    PointXYZL point;
+    cout << "labeled pcd size = " << labeled_pcd->points.size() << endl;
+
+
+    // visualize_labeled_points(labeled_pcd, &centers);
     vector<float> scores(mm->max_target_label, 0);
     PointXYZL default_center;
     default_center.x = default_center.y = default_center.z = default_center.label = 0;
